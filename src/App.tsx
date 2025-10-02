@@ -1,16 +1,24 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { ThemeProvider } from 'styled-components'
 import { AudioEngine } from './audio/AudioEngine'
+import type { EffectsChain, EffectSlot } from './audio/effects'
+import { createDefaultEffectsChain } from './audio/effects'
+import type { EQBand, EQSettings } from './audio/eq'
+import { createDefaultEQSettings } from './audio/eq'
+import Chat from './components/Chat/Chat'
+import FX from './components/FX/FX'
+import KitSelector from './components/KitSelector/KitSelector'
 import * as L from './components/layout/AppShell.styles'
 import PadBrowser from './components/PadBrowser/PadBrowser'
 import PadGrid from './components/PadGrid/PadGrid'
-import SampleControls from './components/SampleControls/SampleControls'
+import ParametricEQ from './components/ParametricEQ/ParametricEQ'
 import SampleEditor from './components/SampleEditor/SampleEditor'
 import SampleInfo from './components/SampleInfo/SampleInfo'
 import Sequencer from './components/Sequencer/Sequencer'
 import Timeline from './components/Timeline/Timeline'
 import Transport from './components/Transport/Transport'
-import { arrayBufferToBase64, base64ToArrayBuffer, loadBpm, loadMetronomeEnabled, loadPatternByIndex, loadPatterns, loadSamples, loadSamplesForSet, loadSwing, loadTimeline, saveBpm, saveMetronomeEnabled, savePatternByIndex, saveSamples, saveSamplesForSet, saveSwing, saveTimeline, TimelineTrack } from './storage/local'
+import type { PersistedSample, TimelineTrack } from './storage/local'
+import { arrayBufferToBase64, base64ToArrayBuffer, loadAllKitNames, loadBpm, loadMetronomeEnabled, loadPatternByIndex, loadSamples, loadSamplesForSet, loadSwing, loadTimeline, saveBpm, saveKitName, saveMetronomeEnabled, savePatternByIndex, saveSamples, saveSamplesForSet, saveSwing, saveTimeline } from './storage/local'
 import { GlobalStyles } from './styles/GlobalStyles'
 import { theme } from './styles/theme'
 
@@ -28,27 +36,46 @@ function App() {
   const [steps, setSteps] = useState<number>(16)
   const [patternIndex, setPatternIndex] = useState<number>(1)
   const [arrangementOn, setArrangementOn] = useState<boolean>(false)
-  const [totalSteps, setTotalSteps] = useState<number>(0)
-  const [loadoutIndex, setLoadoutIndex] = useState<number>(1)
+  const [timelineBar, setTimelineBar] = useState<number>(0)
+  // const [totalSteps, setTotalSteps] = useState<number>(0)
+  const [kitIndex, setKitIndex] = useState<number>(1)
+  const [kitNames, setKitNames] = useState<string[]>(() => loadAllKitNames())
   const [selectedPad, setSelectedPad] = useState<number>(0)
-  const [controls, setControls] = useState({ pitch: 0, warp: false, quantize: true, loop: false, hold: false })
-  const [view, setView] = useState<'mpc' | 'timeline'>('mpc')
+  const [controls, setControls] = useState({ warp: false, quantize: true, loop: false, hold: false })
+  const [view, setView] = useState<'mpc' | 'timeline' | 'chat'>('mpc')
+  const [showEQCurve, setShowEQCurve] = useState<boolean>(false)
   const [tracks, setTracks] = useState<TimelineTrack[]>(() => loadTimeline().length ? loadTimeline() : [
     { name: 'Drums', clips: [] },
     { name: 'Bass', clips: [] },
     { name: 'Synth', clips: [] },
   ])
-  const [selectedMeta, setSelectedMeta] = useState<{ duration?: number; sampleRate?: number; channels?: number; pcm?: Float32Array | null }>({})
+  const [selectedMeta, setSelectedMeta] = useState<{ 
+    duration?: number; 
+    sampleRate?: number; 
+    channels?: number; 
+    pcm?: Float32Array | null;
+    pitch?: number;
+    attack?: number; 
+    decay?: number; 
+    sustain?: number; 
+    release?: number;
+    eq?: EQSettings;
+    effectsChain?: EffectsChain;
+  }>({})
 
+  // Setup audio engine on mount
   useEffect(() => {
     const e = new AudioEngine()
     e.setBpm(bpm)
     e.setMetronome(metronomeOn)
-    e.onStep(({ stepIndex }) => {
+    const stepCb = ({ stepIndex }: { stepIndex: number }) => {
       setCurrentStep(stepIndex)
-      setTotalSteps((prev) => prev + 1)
-    })
+      // setTotalSteps((prev) => prev + 1)
+    }
+    e.onStep(stepCb)
     const onBar = (barIdx: number) => {
+      // track current bar for timeline progress indicator
+      setTimelineBar(barIdx)
       if (!arrangementOn || !isPlaying) return
       for (const t of tracks) {
         const clip = t.clips.find(c => barIdx >= c.startBar && barIdx < c.startBar + c.lengthBars)
@@ -61,12 +88,18 @@ function App() {
     e.onBar(onBar)
     engineRef.current = e
 
-    // Restore persisted state
-    const persistedPatterns = loadPatterns()
-    if (persistedPatterns[0]) {
-      setMatrix(persistedPatterns[0].matrix)
-      e.setPattern(persistedPatterns[0].matrix)
-    }
+    // Restore persisted state: pattern 1 with empty fallback sized to current steps
+    const makeEmpty = (n: number) => Array.from({ length: 16 }, () => Array(n).fill(false))
+    const initial = loadPatternByIndex(1, makeEmpty(steps))
+    // normalize to current steps length
+    const normalized = initial.map(r => {
+      const row = r.slice(0, steps)
+      while (row.length < steps) row.push(false)
+      return row
+    })
+    setMatrix(normalized)
+    e.setSteps(steps)
+    e.setPattern(normalized)
     const persistedSamples = loadSamples()
     if (persistedSamples.length) {
       ;(async () => {
@@ -80,10 +113,12 @@ function App() {
     }
 
     return () => {
-      e.offStep(({ stepIndex }) => setCurrentStep(stepIndex))
+      e.offStep(stepCb)
       e.offBar(onBar)
       e.stop()
     }
+    // We intentionally only run on mount to initialize engine; subsequent state updates are handled by other effects
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   useEffect(() => {
@@ -112,6 +147,52 @@ function App() {
     }
   }, [isPlaying])
 
+  const onPatternChange = useCallback((idx: number) => {
+    setPatternIndex(idx)
+    setMatrix(() => {
+      const makeEmpty = (n: number) => Array.from({ length: 16 }, () => Array(n).fill(false))
+      const fallback = makeEmpty(steps)
+      const loaded = loadPatternByIndex(idx, fallback)
+      // ensure matrix matches current steps
+      const normalized = loaded.map(r => {
+        const row = r.slice(0, steps)
+        while (row.length < steps) row.push(false)
+        return row
+      })
+      engineRef.current?.setSteps(steps)
+      engineRef.current?.setPattern(normalized)
+      return normalized
+    })
+  }, [steps])
+
+  const toggleTimelinePlay = useCallback(() => {
+    const e = engineRef.current!
+    if (isPlaying && arrangementOn) {
+      e.stop()
+      setIsPlaying(false)
+      setArrangementOn(false)
+      setTimelineBar(0)
+    } else {
+      // If currently playing the pattern loop, stop to reset transport and bar counter
+      if (isPlaying) {
+        e.stop()
+        setIsPlaying(false)
+      }
+      setArrangementOn(true)
+      setTimelineBar(0)
+      // Ensure we start with the pattern for bar 0 if defined
+      for (const t of tracks) {
+        const clip = t.clips.find(c => 0 >= c.startBar && 0 < c.startBar + c.lengthBars)
+        if (clip?.patternIndex) {
+          if (clip.patternIndex !== patternIndex) onPatternChange(clip.patternIndex)
+          break
+        }
+      }
+      e.start()
+      setIsPlaying(true)
+    }
+  }, [isPlaying, arrangementOn, tracks, patternIndex, onPatternChange])
+
   const onDropSample = useCallback(async (padIndex: number, file: File) => {
     const e = engineRef.current!
     const sample = await e.loadSampleToPad(padIndex, file)
@@ -121,7 +202,7 @@ function App() {
     const base64 = arrayBufferToBase64(sample.arrayBuffer)
     const updated = [
       ...current.filter((s) => s.id !== sample.id),
-      { id: sample.id, name: sample.name, arrayBufferBase64: base64, pitchSemitones: 0, warp: false, quantize: true, loop: false, hold: false }
+      { id: sample.id, name: sample.name, arrayBufferBase64: base64, pitchSemitones: 0, warp: false, quantize: true, loop: false, hold: false } as PersistedSample
     ]
     saveSamples(updated)
   }, [])
@@ -140,8 +221,19 @@ function App() {
     const sample = engineRef.current?.getSampleForPad(selectedPad)
     if (sample?.audioBuffer) {
       const ch0 = sample.audioBuffer.getChannelData(0)
-      setSelectedMeta({ duration: sample.audioBuffer.duration, sampleRate: sample.audioBuffer.sampleRate, channels: sample.audioBuffer.numberOfChannels, pcm: ch0 })
-      setControls((prev) => ({ ...prev, pitch: sample.pitchSemitones }))
+      setSelectedMeta({ 
+        duration: sample.audioBuffer.duration, 
+        sampleRate: sample.audioBuffer.sampleRate, 
+        channels: sample.audioBuffer.numberOfChannels, 
+        pcm: ch0,
+        pitch: sample.pitchSemitones,
+        attack: sample.attack, 
+        decay: sample.decay, 
+        sustain: sample.sustain, 
+        release: sample.release,
+        eq: sample.eq,
+        effectsChain: sample.effectsChain,
+      })
     } else {
       setSelectedMeta({})
     }
@@ -172,34 +264,29 @@ function App() {
     })
   }, [patternIndex])
 
-  const onPatternChange = useCallback((idx: number) => {
-    setPatternIndex(idx)
+  // onPatternChange moved above to avoid usage-before-definition
+
+  const handleStepsChange = useCallback((n: number) => {
+    setSteps(n)
+    engineRef.current?.setSteps(n)
     setMatrix(prev => {
-      const loaded = loadPatternByIndex(idx, prev)
-      engineRef.current?.setPattern(loaded)
-      return loaded
+      const next = prev.map(r => {
+        const row = r.slice(0, n)
+        while (row.length < n) row.push(false)
+        return row
+      })
+      engineRef.current?.setPattern(next)
+      savePatternByIndex(patternIndex, next)
+      return next
     })
-  }, [])
+  }, [patternIndex])
 
   // Arrow keys change pattern by ±5
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
-        e.preventDefault()
-        const delta = e.key === 'ArrowUp' ? 5 : -5
-        const next = Math.max(1, Math.min(99, patternIndex + delta))
-        onPatternChange(next)
-      } else if (e.ctrlKey && ['1','2','3','4','5'].includes(e.key)) {
-        e.preventDefault()
-        const nextSet = Number(e.key)
-        saveCurrentLoadout(loadoutIndex)
-        loadLoadout(nextSet)
-        setLoadoutIndex(nextSet)
-      }
-    }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [patternIndex, onPatternChange, loadoutIndex])
+  // Keyboard: pattern up/down and kit switch
+  const patternRef = useRef(patternIndex)
+  const kitRef = useRef(kitIndex)
+  useEffect(() => { patternRef.current = patternIndex }, [patternIndex])
+  useEffect(() => { kitRef.current = kitIndex }, [kitIndex])
 
   const onChangeControls = useCallback((changes: Partial<typeof controls>) => {
     setControls((prev) => ({ ...prev, ...changes }))
@@ -211,19 +298,57 @@ function App() {
     if (!e) return
     if (changes.pitch !== undefined) {
       e.setPadPitch(selectedPad, changes.pitch)
-      setControls((prev) => ({ ...prev, pitch: changes.pitch! }))
+      // Immediately update state
+      setSelectedMeta((prev) => ({ ...prev, pitch: changes.pitch }))
     }
     if (changes.attack !== undefined || changes.decay !== undefined || changes.sustain !== undefined || changes.release !== undefined) {
       e.setPadAdsr(selectedPad, { attack: changes.attack, decay: changes.decay, sustain: changes.sustain, release: changes.release })
+      // Immediately update state with the values we just set
+      setSelectedMeta((prev) => ({
+        ...prev,
+        attack: changes.attack ?? prev.attack,
+        decay: changes.decay ?? prev.decay,
+        sustain: changes.sustain ?? prev.sustain,
+        release: changes.release ?? prev.release,
+      }))
     }
   }, [selectedPad])
 
-  const saveCurrentLoadout = useCallback((setId: number) => {
+  const onChangeEffectSlot = useCallback((slotIndex: number, effect: EffectSlot) => {
     const e = engineRef.current
     if (!e) return
-    const samples: any[] = []
+    e.updatePadEffectSlot(selectedPad, slotIndex, effect)
+    // Force state update with new reference
+    const sample = e.getSampleForPad(selectedPad)
+    if (sample) {
+      // Create new array reference to ensure React detects change
+      setSelectedMeta((prev) => ({
+        ...prev,
+        effectsChain: [...sample.effectsChain] as EffectsChain,
+      }))
+    }
+  }, [selectedPad])
+
+  const onChangeEQBand = useCallback((bandIndex: number, band: EQBand) => {
+    const e = engineRef.current
+    if (!e) return
+    e.updatePadEQBand(selectedPad, bandIndex, band)
+    // Force state update with new reference - deep copy to ensure React detects change
+    const sample = e.getSampleForPad(selectedPad)
+    if (sample) {
+      setSelectedMeta((prev) => ({
+        ...prev,
+        eq: sample.eq.map(b => ({ ...b })) as EQSettings,
+      }))
+    }
+  }, [selectedPad])
+
+  const saveCurrentKit = useCallback((kitId: number) => {
+    const e = engineRef.current
+    if (!e) return
+    const samples: PersistedSample[] = []
     for (let i = 0; i < 16; i++) {
-      const s = e.getSampleForPad(i) as any
+      const s = e.getSampleForPad(i)
       if (s?.arrayBuffer) {
         samples.push({
           id: `pad-${i}`,
@@ -241,20 +366,22 @@ function App() {
         })
       }
     }
-    saveSamplesForSet(setId, samples as any)
+    saveSamplesForSet(kitId, samples)
   }, [])
 
-  const loadLoadout = useCallback((setId: number) => {
+  const loadKit = useCallback((kitId: number) => {
     const e = engineRef.current
     if (!e) return
-    const list = loadSamplesForSet(setId)
+    const list = loadSamplesForSet(kitId)
+    // Clear current pad names
+    setPadNames({})
     ;(async () => {
       for (const s of list) {
         const padIndex = Number(s.id.replace('pad-', ''))
         const ab = base64ToArrayBuffer(s.arrayBufferBase64)
         await e.loadArrayBufferToPad(padIndex, ab, s.name)
         e.setPadPitch(padIndex, s.pitchSemitones ?? 0)
-        e.setPadAdsr(padIndex, { attack: (s as any).attack, decay: (s as any).decay, sustain: (s as any).sustain, release: (s as any).release })
+        e.setPadAdsr(padIndex, { attack: (s as PersistedSample).attack, decay: (s as PersistedSample).decay, sustain: (s as PersistedSample).sustain, release: (s as PersistedSample).release })
         setPadNames((prev) => ({ ...prev, [padIndex]: s.name }))
       }
     })()
@@ -285,6 +412,41 @@ function App() {
     setPadNames((prev) => ({ ...prev, [padIndex]: name }))
   }, [])
 
+  // Install key handlers (after callbacks are defined)
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+        e.preventDefault()
+        const delta = e.key === 'ArrowUp' ? 5 : -5
+        const next = Math.max(1, Math.min(99, patternRef.current + delta))
+        onPatternChange(next)
+      } else if (e.ctrlKey && ['1','2','3','4','5','6','7','8'].includes(e.key)) {
+        e.preventDefault()
+        const nextKit = Number(e.key)
+        saveCurrentKit(kitRef.current)
+        loadKit(nextKit)
+        setKitIndex(nextKit)
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [onPatternChange, saveCurrentKit, loadKit])
+
+  const handleKitChange = useCallback((newKitIndex: number) => {
+    saveCurrentKit(kitIndex)
+    loadKit(newKitIndex)
+    setKitIndex(newKitIndex)
+  }, [kitIndex, saveCurrentKit, loadKit])
+
+  const handleKitNameChange = useCallback((kitIdx: number, name: string) => {
+    saveKitName(kitIdx, name)
+    setKitNames(prev => {
+      const next = [...prev]
+      next[kitIdx - 1] = name
+      return next
+    })
+  }, [])
+
   return (
     <ThemeProvider theme={theme}>
       <GlobalStyles />
@@ -296,6 +458,7 @@ function App() {
                 <div style={{ display: 'grid', gap: 6 }}>
                   <button onClick={() => setView('mpc')}>MPC</button>
                   <button onClick={() => setView('timeline')}>Timeline</button>
+                  <button onClick={() => setView('chat')}>Chat</button>
                 </div>
               </L.Main>
             </L.Header>
@@ -303,43 +466,65 @@ function App() {
           <PadBrowser padNames={padNames} activePads={activePads} onSelectPad={setSelectedPad} onTriggerPad={onTriggerPad} />
         </L.Sidebar>
         <L.Header>
-          <Transport isPlaying={isPlaying} bpm={bpm} metronomeOn={metronomeOn} steps={steps} swing={swing} onTogglePlay={togglePlay} onTempoChange={setBpm} onToggleMetronome={() => setMetronomeOn(v => !v)} onStepsChange={(n) => { setSteps(n); engineRef.current?.setSteps(n); setMatrix(prev => prev.map(r => { const next = r.slice(0, n); while (next.length < n) next.push(false); return next })) }} onSwingChange={setSwing} arrangementOn={arrangementOn} onToggleArrangement={() => setArrangementOn(v => !v)} />
+          <Transport isPlaying={isPlaying} bpm={bpm} metronomeOn={metronomeOn} steps={steps} swing={swing} onTogglePlay={togglePlay} onTempoChange={setBpm} onToggleMetronome={() => setMetronomeOn(v => !v)} onStepsChange={handleStepsChange} onSwingChange={setSwing} arrangementOn={arrangementOn} onToggleArrangement={() => setArrangementOn(v => !v)} />
         </L.Header>
         <L.Main>
           {view === 'mpc' && (
             <>
+          <L.HalfRow>
+            <div style={{ display: 'grid', gap: '12px' }}>
+              <SampleInfo
+                padIndex={selectedPad ?? null}
+                name={padNames[selectedPad]}
+                durationSec={selectedMeta.duration}
+                sampleRate={selectedMeta.sampleRate}
+                channels={selectedMeta.channels}
+                pcmData={selectedMeta.pcm ?? null}
+                pitch={selectedMeta.pitch ?? 0}
+                attack={selectedMeta.attack ?? 0.005}
+                decay={selectedMeta.decay ?? 0.05}
+                sustain={selectedMeta.sustain ?? 0.8}
+                release={selectedMeta.release ?? 0.08}
+                eq={showEQCurve ? selectedMeta.eq : undefined}
+                warp={controls.warp}
+                quantize={controls.quantize}
+                loop={controls.loop}
+                hold={controls.hold}
+                onChange={onChangeSampleInfo}
+                onControlsChange={onChangeControls}
+              />
+              <ParametricEQ
+                eqBands={selectedMeta.eq ?? createDefaultEQSettings()}
+                onChange={onChangeEQBand}
+                showCurve={showEQCurve}
+                onShowCurveChange={setShowEQCurve}
+              />
+            </div>
+          </L.HalfRow>
+          <L.HalfRow>
+            <FX
+              effectSlots={selectedMeta.effectsChain ?? createDefaultEffectsChain()}
+              onChange={onChangeEffectSlot}
+            />
+          </L.HalfRow>
           <L.FullRow>
-            <SampleInfo
-              padIndex={selectedPad ?? null}
-              name={padNames[selectedPad]}
-              durationSec={selectedMeta.duration}
-              sampleRate={selectedMeta.sampleRate}
-              channels={selectedMeta.channels}
-              pcmData={selectedMeta.pcm ?? null}
-              pitch={controls.pitch}
-              onChange={onChangeSampleInfo}
+            <KitSelector
+              currentKit={kitIndex}
+              kitNames={kitNames}
+              onKitChange={handleKitChange}
+              onKitNameChange={handleKitNameChange}
             />
           </L.FullRow>
-          <PadGrid activePad={activePad} activePads={activePads} padNames={padNames} onDropSample={onDropSample} onTriggerPad={onTriggerPad} onSelectPad={setSelectedPad} />
+          <PadGrid activePad={activePad} activePads={activePads} padNames={padNames} onDropSample={onDropSample} onTriggerPad={onTriggerPad} />
           <Sequencer
             matrix={matrix}
             currentStep={currentStep}
             steps={steps}
             onToggle={onToggleStep}
             patternNumber={patternIndex}
-            stepsControl={(
-              <select value={steps} onChange={(e) => { const n = Number(e.target.value); setSteps(n); engineRef.current?.setSteps(n); setMatrix(prev => prev.map(r => { const next = r.slice(0, n); while (next.length < n) next.push(false); return next })) }}>
-                <option value={8}>8</option>
-                <option value={16}>16</option>
-                <option value={32}>32</option>
-                <option value={64}>64</option>
-              </select>
-            )}
+            padNames={padNames}
             onPatternChange={onPatternChange}
           />
-          <L.FullRow>
-            <SampleControls {...controls} onChange={onChangeControls} />
-          </L.FullRow>
           <L.FullRow>
             <SampleEditor onAssignSlice={onAssignSlice} />
           </L.FullRow>
@@ -349,6 +534,9 @@ function App() {
             <L.FullRow>
               <Timeline
                 tracks={tracks}
+                isPlaying={isPlaying && arrangementOn}
+                currentBar={timelineBar}
+                onTogglePlay={toggleTimelinePlay}
                 onAddClip={(trackIndex, startBar, lengthBars, label) => {
                   setTracks(prev => {
                     const next = prev.map(t => ({ ...t, clips: t.clips.slice() }))
@@ -359,13 +547,19 @@ function App() {
                 }}
                 onUpdateClips={(trackIndex, clips) => {
                   setTracks(prev => {
-                    const next = prev.map(t => ({ ...t, clips: t.clips.slice() }))
-                    next[trackIndex].clips = clips
+                    const next: TimelineTrack[] = prev.map(t => ({ ...t, clips: t.clips.map(c => ({ ...c })) }))
+                    // Ensure patternIndex is a number (default to 0 meaning none)
+                    next[trackIndex].clips = clips.map(c => ({ ...c, patternIndex: c.patternIndex ?? 0 }))
                     saveTimeline(next)
                     return next
                   })
                 }}
               />
+            </L.FullRow>
+          )}
+          {view === 'chat' && (
+            <L.FullRow>
+              <Chat />
             </L.FullRow>
           )}
         </L.Main>

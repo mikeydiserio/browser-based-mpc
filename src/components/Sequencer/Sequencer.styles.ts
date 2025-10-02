@@ -6,11 +6,31 @@ export const Container = styled.div`
   padding: 10px;
   box-shadow: ${({ theme }) => theme.shadows.soft};
   display: grid;
-  gap: 10px;
-  grid-template-rows: auto 1fr;
+  gap: 2px;
+  grid-auto-rows: auto;
 `;
 
 export const Row = styled.div`
+  display: grid;
+  grid-template-columns: 100px var(--cols);
+  gap: 6px;
+  align-items: center;
+  min-height: 0;
+`;
+
+export const RowLabel = styled.div`
+  font-size: 11px;
+  font-weight: 500;
+  color: ${({ theme }) => theme.colors.textSecondary};
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 0 8px;
+  text-align: left;
+  line-height: 1.2;
+`;
+
+export const RowSteps = styled.div`
   display: grid;
   grid-template-columns: var(--cols);
   gap: 4px;
@@ -21,8 +41,9 @@ export const Step = styled.button<{
   $lit?: boolean;
   $accent?: boolean;
 }>`
-  height: 16px;
-  border-radius: 6px;
+  width: 36px;
+  height: 28px;
+  border-radius: 4px;
   background: ${({ theme, $active, $lit, $accent }) =>
     $lit
       ? $accent
@@ -40,6 +61,18 @@ export const Step = styled.button<{
 
 export const Header = styled.div`
   display: grid;
+  grid-template-columns: 100px var(--cols);
+  gap: 6px;
+  align-items: center;
+  margin-bottom: 2px;
+`;
+
+export const HeaderSpacer = styled.div`
+  width: 100px;
+`;
+
+export const HeaderBeats = styled.div`
+  display: grid;
   grid-template-columns: var(--cols);
   gap: 4px;
 `;
@@ -49,6 +82,7 @@ export const Footer = styled.div`
   align-items: center;
   justify-content: flex-end;
   gap: 8px;
+  margin-top: 4px;
 `;
 
 export const PatternDisplay = styled.div`
@@ -60,6 +94,18 @@ export const PatternDisplay = styled.div`
   padding: 4px 8px;
   cursor: ns-resize;
   user-select: none;
+`;
+
+export const PatternInput = styled.input`
+  width: 64px;
+  font-family: ${({ theme }) => theme.typography.mono};
+  font-variant-numeric: tabular-nums;
+  background: ${({ theme }) => theme.colors.panelRaised};
+  border: 1px solid ${({ theme }) => theme.colors.gridLine};
+  border-radius: ${({ theme }) => theme.radii.sm};
+  padding: 4px 6px;
+  color: ${({ theme }) => theme.colors.textPrimary};
+  text-align: right;
 `;
 
 export const BeatLight = styled.div<{ $lit?: boolean; $accent?: boolean }>`

@@ -127,3 +127,20 @@ export function loadTimeline(): TimelineTrack[] {
   const raw = localStorage.getItem(TIMELINE_KEY);
   return raw ? JSON.parse(raw) : [];
 }
+
+// Kit names (1-8)
+const KIT_NAME_KEY = "mpc.kit.name.v1";
+
+export function saveKitName(kitIndex: number, name: string) {
+  localStorage.setItem(`${KIT_NAME_KEY}.${kitIndex}`, name);
+}
+
+export function loadKitName(kitIndex: number): string {
+  return (
+    localStorage.getItem(`${KIT_NAME_KEY}.${kitIndex}`) ?? `Kit ${kitIndex}`
+  );
+}
+
+export function loadAllKitNames(): string[] {
+  return Array.from({ length: 8 }, (_, i) => loadKitName(i + 1));
+}

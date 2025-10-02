@@ -7,22 +7,23 @@ type SequencerProps = {
   steps: number
   onToggle: (row: number, col: number) => void
   patternNumber?: number
-  stepsControl?: React.ReactNode
   onPatternChange?: (pattern: number) => void
+  padNames?: Record<number, string | undefined>
 }
 
-export function Sequencer({ matrix, currentStep, steps, onToggle, patternNumber = 1, stepsControl, onPatternChange }: SequencerProps) {
-  const rows = useMemo(() => Array.from({ length: 16 }, (_, i) => i), [])
+export function Sequencer({ matrix, currentStep, steps, onToggle, patternNumber = 1, onPatternChange, padNames = {} }: SequencerProps) {
+  // Filter rows to only show pads that have samples assigned
+  const rows = useMemo(() => {
+    return Array.from({ length: 16 }, (_, i) => i).filter(i => padNames[i] !== undefined)
+  }, [padNames])
   const cols = useMemo(() => Array.from({ length: steps }, (_, i) => i), [steps])
   const [litIndex, setLitIndex] = useState<number>(0)
-  const [dragStartY, setDragStartY] = useState<number | null>(null)
-  const [dragStartVal, setDragStartVal] = useState<number>(patternNumber)
-  const [localPattern, setLocalPattern] = useState<number>(patternNumber)
+  const [localPatternStr, setLocalPatternStr] = useState<string>(String(patternNumber))
+  type CSSVars = React.CSSProperties & { ['--cols']?: string }
 
   // sync when external pattern changes
   useEffect(() => {
-    setLocalPattern(patternNumber)
-    setDragStartVal(patternNumber)
+    setLocalPatternStr(String(patternNumber))
   }, [patternNumber])
 
   useEffect(() => {
@@ -32,53 +33,61 @@ export function Sequencer({ matrix, currentStep, steps, onToggle, patternNumber 
   const gridTemplate = useMemo(() => `repeat(${steps}, 1fr)`, [steps])
 
   return (
-    <S.Container style={{ ['--cols' as any]: gridTemplate }}>
+    <S.Container style={{ ['--cols']: gridTemplate } as CSSVars}>
       <S.Header>
-        {cols.map((c) => {
-          const accent = (c % 4) === 0
-          return <S.BeatLight key={`h-${c}`} $lit={litIndex === c} $accent={accent} />
-        })}
+        <S.HeaderSpacer />
+        <S.HeaderBeats>
+          {cols.map((c) => {
+            const accent = (c % 4) === 0
+            return <S.BeatLight key={`h-${c}`} $lit={litIndex === c} $accent={accent} />
+          })}
+        </S.HeaderBeats>
       </S.Header>
       {rows.map((r) => (
         <S.Row key={`r-${r}`}>
-          {cols.map((c) => {
-            const active = matrix[r]?.[c] ?? false
-            const lit = litIndex === c
-            const accent = (c % 4) === 0
-            return (
-              <S.Step
-                key={`s-${r}-${c}`}
-                $active={active}
-                $lit={lit}
-                $accent={accent}
-                onClick={() => onToggle(r, c)}
-              />
-            )
-          })}
+          <S.RowLabel title={padNames[r]}>
+            {padNames[r] || `Pad ${r + 1}`}
+          </S.RowLabel>
+          <S.RowSteps>
+            {cols.map((c) => {
+              const active = matrix[r]?.[c] ?? false
+              const lit = litIndex === c
+              const accent = (c % 4) === 0
+              return (
+                <S.Step
+                  key={`s-${r}-${c}`}
+                  $active={active}
+                  $lit={lit}
+                  $accent={accent}
+                  onClick={() => onToggle(r, c)}
+                />
+              )
+            })}
+          </S.RowSteps>
         </S.Row>
       ))}
       <S.Footer>
-        <S.PatternDisplay
-          onMouseDown={(e) => { setDragStartY(e.clientY); setDragStartVal(localPattern) }}
-          onMouseUp={() => setDragStartY(null)}
-          onMouseLeave={() => setDragStartY(null)}
-          onMouseMove={(e) => {
-            if (dragStartY === null) return
-            const delta = dragStartY - e.clientY
-            const next = Math.max(1, Math.min(99, Math.round(dragStartVal + delta / 5)))
-            setLocalPattern(next)
-            onPatternChange?.(next)
-          }}
-          title="Drag up/down to change pattern"
-        >
-          Pat {localPattern}
-        </S.PatternDisplay>
-        {stepsControl}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <span style={{ opacity: 0.8 }}>Pat</span>
+          <S.PatternInput
+            type="number"
+            min={1}
+            max={99}
+            value={localPatternStr}
+            onChange={(e) => {
+              const val = e.target.value
+              setLocalPatternStr(val)
+              const parsed = parseInt(val, 10)
+              if (isNaN(parsed)) return
+              const clamped = Math.max(1, Math.min(99, parsed))
+              if (clamped !== patternNumber) onPatternChange?.(clamped)
+            }}
+            inputMode="numeric"
+          />
+        </div>
       </S.Footer>
     </S.Container>
   )
 }
 
 export default Sequencer
-
-

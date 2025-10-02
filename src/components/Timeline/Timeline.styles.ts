@@ -10,6 +10,28 @@ export const Container = styled.div`
   gap: 8px;
 `;
 
+export const Toolbar = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 8px;
+`;
+
+export const PlayButton = styled.button<{ $primary?: boolean }>`
+  padding: 6px 10px;
+  border-radius: ${({ theme }) => theme.radii.sm};
+  border: 1px solid ${({ theme }) => theme.colors.gridLine};
+  background: ${({ theme, $primary }) =>
+    $primary ? theme.colors.accent : theme.colors.panelRaised};
+  color: ${({ theme, $primary }) =>
+    $primary ? "#0b0d12" : theme.colors.textPrimary};
+  cursor: pointer;
+`;
+
+export const BarReadout = styled.span`
+  font-size: 12px;
+  color: ${({ theme }) => theme.colors.textSecondary};
+`;
+
 export const Tracks = styled.div`
   display: grid;
   grid-auto-rows: 28px;
@@ -34,6 +56,15 @@ export const Grid = styled.div`
   background: ${({ theme }) => theme.colors.panelRaised};
   border: 1px solid ${({ theme }) => theme.colors.gridLine};
   border-radius: ${({ theme }) => theme.radii.sm};
+`;
+
+export const Playhead = styled.div`
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: ${({ theme }) => theme.colors.accent};
+  pointer-events: none;
 `;
 
 export const Clip = styled.div`

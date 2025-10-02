@@ -36,7 +36,7 @@ export const Main = styled.main`
   grid-area: main;
   padding: ${({ theme }) => theme.spacing(2)};
   display: grid;
-  grid-template-columns: auto 1fr;
+  grid-template-columns: 1fr 1fr;
   grid-auto-rows: max-content;
   gap: ${({ theme }) => theme.spacing(2)};
 `;
@@ -54,4 +54,8 @@ export const Footer = styled.footer`
 
 export const FullRow = styled.div`
   grid-column: 1 / -1;
+`;
+
+export const HalfRow = styled.div`
+  grid-column: span 1;
 `;

@@ -23,7 +23,7 @@ const defaultHotkeys = [
   'z','x','c','v'
 ]
 
-export function PadGrid({ activePad, activePads, padNames, onDropSample, onTriggerPad, onSelectPad }: PadGridProps) {
+export function PadGrid({ activePad, activePads, padNames, onDropSample, onTriggerPad, onSelectPad: _onSelectPad }: PadGridProps) {
   const [isActive, setIsActive] = useState<number | null>(null)
 
   const handleDrop = useCallback((padIndex: number, e: React.DragEvent) => {
@@ -71,7 +71,7 @@ export function PadGrid({ activePad, activePads, padNames, onDropSample, onTrigg
             key={index}
             $active={active}
             $loaded={loaded}
-            onClick={() => { onTriggerPad(index); onSelectPad?.(index) }}
+            onClick={() => onTriggerPad(index)}
             onDragEnter={preventDefaults}
             onDragOver={preventDefaults}
             onDrop={(e) => handleDrop(index, e)}

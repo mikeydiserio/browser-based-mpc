@@ -7,11 +7,14 @@ type Track = { name: string; clips: Clip[] }
 
 type Props = {
   tracks: Track[]
+  isPlaying?: boolean
+  currentBar?: number
+  onTogglePlay?: () => void
   onAddClip?: (trackIndex: number, startBar: number, lengthBars: number, label: string) => void
   onUpdateClips?: (trackIndex: number, clips: Clip[]) => void
 }
 
-export function Timeline({ tracks, onAddClip, onUpdateClips }: Props) {
+export function Timeline({ tracks, isPlaying = false, currentBar = 0, onTogglePlay, onAddClip, onUpdateClips }: Props) {
   const [ghost, setGhost] = useState<{ track: number; startBar: number; lengthBars: number } | null>(null)
   const [drag, setDrag] = useState<{ track: number; clipIndex: number; type: 'move' | 'resize-right' | 'resize-left'; startX: number; startBar: number; startLen: number } | null>(null)
   const gridRefs = useRef<Array<HTMLDivElement | null>>([])
@@ -25,14 +28,22 @@ export function Timeline({ tracks, onAddClip, onUpdateClips }: Props) {
     return b
   }, [])
 
+  const playheadLeftPx = Math.max(0, Math.min(bars, currentBar)) * pxPerBar
+
   return (
     <S.Container>
+      <S.Toolbar>
+        <S.PlayButton $primary onClick={onTogglePlay}>{isPlaying ? 'Stop Timeline' : 'Play Timeline'}</S.PlayButton>
+        <S.BarReadout>Bar: {Math.max(0, currentBar)}</S.BarReadout>
+      </S.Toolbar>
       <S.Tracks>
         {tracks.map((t, i) => (
           <S.TrackRow key={i}>
             <S.TrackName>{t.name}</S.TrackName>
             <S.Grid
-              ref={(el) => (gridRefs.current[i] = el)}
+              ref={(el) => {
+                gridRefs.current[i] = el
+              }}
               onMouseDown={(e) => {
                 const rect = gridRefs.current[i]!.getBoundingClientRect()
                 const start = barFromX(e.clientX - rect.left)
@@ -75,6 +86,9 @@ export function Timeline({ tracks, onAddClip, onUpdateClips }: Props) {
               }}
               onMouseLeave={() => setGhost(null)}
             >
+              {i === 0 && (
+                <S.Playhead style={{ left: `${playheadLeftPx}px` }} />
+              )}
               {t.clips.map((c, ci) => (
                 <S.Clip
                   key={ci}
@@ -107,5 +121,3 @@ export function Timeline({ tracks, onAddClip, onUpdateClips }: Props) {
 }
 
 export default Timeline
-
-
