@@ -2,6 +2,12 @@ import type { DelayTime, EffectsChain, EffectSlot } from "./effects";
 import { createDefaultEffectsChain } from "./effects";
 import type { EQSettings } from "./eq";
 import { createDefaultEQSettings } from "./eq";
+import {
+  defaultTB303Patch,
+  TB303Synth,
+  type TB303Note,
+  type TB303Patch,
+} from "./TB303Synth";
 
 export type LoadedSample = {
   id: string;
@@ -9,6 +15,7 @@ export type LoadedSample = {
   arrayBuffer: ArrayBuffer;
   audioBuffer?: AudioBuffer;
   pitchSemitones: number;
+  gain: number;
   attack?: number;
   decay?: number;
   sustain?: number;
@@ -23,6 +30,15 @@ export type LoadedSample = {
   eq: EQSettings;
   // FX chain
   effectsChain: EffectsChain;
+};
+
+export type LoadedSynth = {
+  id: string;
+  type: "tb303";
+  name: string;
+  synth: TB303Synth;
+  patch: TB303Patch;
+  notes: TB303Note[];
 };
 
 export type StepEvent = {
@@ -42,10 +58,12 @@ export class AudioEngine {
   private timerId: number | null = null;
   private metronomeOn = true;
   private metronomeGain: GainNode | null = null;
+  private masterGain: GainNode;
   private swingAmount = 0; // 0..1 fraction of half-step delay on off-steps
 
   private stepCallbacks = new Set<(e: StepEvent) => void>();
   private padMap = new Map<string, LoadedSample>();
+  private synthMap = new Map<string, LoadedSynth>();
   private patternMatrix: boolean[][] = Array.from({ length: 16 }, () =>
     Array(16).fill(false)
   );
@@ -63,9 +81,15 @@ export class AudioEngine {
     };
     this.audioContext =
       context ?? new (W.AudioContext || W.webkitAudioContext!)();
+
+    // Create master gain node
+    this.masterGain = this.audioContext.createGain();
+    this.masterGain.gain.value = 0.8; // Default to 80% volume
+    this.masterGain.connect(this.audioContext.destination);
+
     this.metronomeGain = this.audioContext.createGain();
     this.metronomeGain.gain.value = 0.0;
-    this.metronomeGain.connect(this.audioContext.destination);
+    this.metronomeGain.connect(this.masterGain);
   }
 
   setBpm(bpm: number) {
@@ -74,6 +98,16 @@ export class AudioEngine {
 
   getBpm() {
     return this.bpm;
+  }
+
+  setMasterVolume(volume: number) {
+    // Clamp between 0 and 1
+    const normalizedVolume = Math.max(0, Math.min(1, volume));
+    this.masterGain.gain.value = normalizedVolume;
+  }
+
+  getMasterVolume() {
+    return this.masterGain.gain.value;
   }
 
   setMetronome(on: boolean) {
@@ -145,11 +179,58 @@ export class AudioEngine {
     for (let padRow = 0; padRow < this.patternMatrix.length; padRow++) {
       if (this.patternMatrix[padRow]?.[stepIndex]) {
         const padId = `pad-${padRow}`;
-        const sample = this.padMap.get(padId);
-        if (sample?.audioBuffer) {
-          this.triggerBuffer(sample, time);
+
+        // Check if this pad has a synth
+        const synth = this.synthMap.get(padId);
+        if (synth) {
+          this.triggerSynthNotes(synth, stepIndex, time);
+        } else {
+          // Otherwise, trigger sample
+          const sample = this.padMap.get(padId);
+          if (sample?.audioBuffer) {
+            this.triggerBuffer(sample, time);
+          }
         }
       }
+    }
+  }
+
+  private triggerSynthNotes(
+    loadedSynth: LoadedSynth,
+    stepIndex: number,
+    time: number
+  ) {
+    // Find notes that start at this step
+    const notesToPlay = loadedSynth.notes.filter(
+      (n) => n.startStep === stepIndex
+    );
+
+    for (const note of notesToPlay) {
+      const secondsPerBeat = 60.0 / this.bpm;
+      const stepDuration = secondsPerBeat / 4; // 16th note
+      const noteDuration = note.duration * stepDuration;
+
+      // Check if previous note has slide flag
+      let slideFrom: number | undefined;
+      if (note.slide && stepIndex > 0) {
+        const prevNotes = loadedSynth.notes.filter(
+          (n) => n.startStep < stepIndex
+        );
+        if (prevNotes.length > 0) {
+          const lastNote = prevNotes.reduce((a, b) =>
+            a.startStep > b.startStep ? a : b
+          );
+          slideFrom = lastNote.note;
+        }
+      }
+
+      loadedSynth.synth.triggerNote(
+        note.note,
+        time,
+        noteDuration,
+        note.accent,
+        slideFrom
+      );
     }
   }
 
@@ -402,6 +483,11 @@ export class AudioEngine {
     const playbackRate = Math.pow(2, sample.pitchSemitones / 12);
     source.playbackRate.value = playbackRate;
 
+    // Sample gain node
+    const sampleGain = this.audioContext.createGain();
+    sampleGain.gain.value = sample.gain ?? 1.0;
+    source.connect(sampleGain);
+
     const amp = this.audioContext.createGain();
     const a = sample.attack ?? 0.005;
     const d = sample.decay ?? 0.05;
@@ -419,7 +505,7 @@ export class AudioEngine {
       amp.gain.linearRampToValueAtTime(0.0001, when + dur);
     }
 
-    source.connect(amp);
+    sampleGain.connect(amp);
 
     // Apply EQ
     let outputNode: AudioNode = amp;
@@ -430,7 +516,7 @@ export class AudioEngine {
       outputNode = this.applyEffect(effect, outputNode);
     }
 
-    outputNode.connect(this.audioContext.destination);
+    outputNode.connect(this.masterGain);
 
     if (sample.loop) {
       source.loop = true;
@@ -460,6 +546,7 @@ export class AudioEngine {
       arrayBuffer,
       audioBuffer,
       pitchSemitones: 0,
+      gain: 1.0,
       attack: 0.005,
       decay: 0.05,
       sustain: 0.8,
@@ -539,6 +626,7 @@ export class AudioEngine {
       arrayBuffer,
       audioBuffer,
       pitchSemitones: 0,
+      gain: 1.0,
       attack: 0.005,
       decay: 0.05,
       sustain: 0.8,
@@ -570,6 +658,7 @@ export class AudioEngine {
       arrayBuffer,
       audioBuffer,
       pitchSemitones: 0,
+      gain: 1.0,
       attack: 0.005,
       decay: 0.05,
       sustain: 0.8,
@@ -632,6 +721,13 @@ export class AudioEngine {
     s.pitchSemitones = semitones;
   }
 
+  setPadGain(padIndex: number, gain: number) {
+    const s = this.padMap.get(`pad-${padIndex}`);
+    if (!s) return;
+    // Clamp between 0 and 2 (allowing for some amplification)
+    s.gain = Math.max(0, Math.min(2, gain));
+  }
+
   setPadEffectsChain(padIndex: number, effectsChain: EffectsChain) {
     const s = this.padMap.get(`pad-${padIndex}`);
     if (!s) return;
@@ -664,5 +760,151 @@ export class AudioEngine {
     const newEQ = [...s.eq] as EQSettings;
     newEQ[bandIndex] = band;
     s.eq = newEQ;
+  }
+
+  clearPad(padIndex: number) {
+    const padId = `pad-${padIndex}`;
+    this.padMap.delete(padId);
+
+    // Also clear synth if assigned
+    const synth = this.synthMap.get(padId);
+    if (synth) {
+      synth.synth.disconnect();
+      this.synthMap.delete(padId);
+    }
+  }
+
+  clearAllPads() {
+    this.padMap.clear();
+
+    // Also clear all synths
+    for (const [, loadedSynth] of this.synthMap) {
+      loadedSynth.synth.disconnect();
+    }
+    this.synthMap.clear();
+  }
+
+  /**
+   * Load samples from URLs (for loading preset drum kits)
+   * Returns a map of pad indices to sample names
+   */
+  async loadSamplesFromUrls(urls: string[]): Promise<Map<number, string>> {
+    const loadedPads = new Map<number, string>();
+
+    // Load up to 16 samples (one per pad)
+    const samplesToLoad = urls.slice(0, 16);
+
+    for (let i = 0; i < samplesToLoad.length; i++) {
+      const url = samplesToLoad[i];
+      try {
+        const response = await fetch(url);
+        if (!response.ok) {
+          console.warn(`Failed to load sample from ${url}`);
+          continue;
+        }
+
+        const arrayBuffer = await response.arrayBuffer();
+        const audioBuffer = await this.audioContext.decodeAudioData(
+          arrayBuffer.slice(0)
+        );
+
+        // Extract sample name from URL
+        const sampleName = url.split("/").pop() || `Sample ${i + 1}`;
+
+        const sample: LoadedSample = {
+          id: `pad-${i}`,
+          name: sampleName,
+          arrayBuffer,
+          audioBuffer,
+          pitchSemitones: 0,
+          gain: 1.0,
+          attack: 0.005,
+          decay: 0.05,
+          sustain: 0.8,
+          release: 0.08,
+          warp: false,
+          quantize: true,
+          loop: false,
+          hold: false,
+          eq: createDefaultEQSettings(),
+          effectsChain: createDefaultEffectsChain(),
+        };
+
+        this.padMap.set(sample.id, sample);
+        loadedPads.set(i, sampleName);
+      } catch (error) {
+        console.error(`Error loading sample from ${url}:`, error);
+      }
+    }
+
+    return loadedPads;
+  }
+
+  // Synth management methods
+  assignSynthToPad(padIndex: number, synthType: "tb303") {
+    const padId = `pad-${padIndex}`;
+
+    // Clear any existing sample
+    this.padMap.delete(padId);
+
+    // Clear any existing synth
+    const existing = this.synthMap.get(padId);
+    if (existing) {
+      existing.synth.disconnect();
+    }
+
+    // Create new synth instance
+    if (synthType === "tb303") {
+      const synth = new TB303Synth(this.audioContext, defaultTB303Patch);
+      const loadedSynth: LoadedSynth = {
+        id: padId,
+        type: "tb303",
+        name: "TB-303",
+        synth,
+        patch: defaultTB303Patch,
+        notes: [],
+      };
+      this.synthMap.set(padId, loadedSynth);
+      return loadedSynth;
+    }
+  }
+
+  getSynthForPad(padIndex: number): LoadedSynth | undefined {
+    return this.synthMap.get(`pad-${padIndex}`);
+  }
+
+  updateSynthPatch(padIndex: number, patch: Partial<TB303Patch>) {
+    const synth = this.synthMap.get(`pad-${padIndex}`);
+    if (!synth) return;
+
+    synth.patch = { ...synth.patch, ...patch };
+    synth.synth.setPatch(patch);
+  }
+
+  updateSynthNotes(padIndex: number, notes: TB303Note[]) {
+    const synth = this.synthMap.get(`pad-${padIndex}`);
+    if (!synth) return;
+
+    synth.notes = notes;
+  }
+
+  triggerPadSynth(
+    padIndex: number,
+    note: number,
+    duration: number = 0.5,
+    accent: boolean = false
+  ) {
+    const synth = this.synthMap.get(`pad-${padIndex}`);
+    if (!synth) return;
+
+    const now = this.audioContext.currentTime;
+    synth.synth.triggerNote(note, now, duration, accent);
+  }
+
+  getPadType(padIndex: number): "sample" | "synth" | null {
+    const padId = `pad-${padIndex}`;
+    if (this.padMap.has(padId)) return "sample";
+    if (this.synthMap.has(padId)) return "synth";
+    return null;
   }
 }

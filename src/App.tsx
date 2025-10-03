@@ -5,22 +5,29 @@ import type { EffectsChain, EffectSlot } from './audio/effects'
 import { createDefaultEffectsChain } from './audio/effects'
 import type { EQBand, EQSettings } from './audio/eq'
 import { createDefaultEQSettings } from './audio/eq'
+import type { TB303Note, TB303Patch } from './audio/TB303Synth'
+import { defaultTB303Patch } from './audio/TB303Synth'
 import Chat from './components/Chat/Chat'
 import FX from './components/FX/FX'
+import type { InstrumentType } from './components/InstrumentSelector/InstrumentSelector'
+import InstrumentSelector from './components/InstrumentSelector/InstrumentSelector'
 import KitSelector from './components/KitSelector/KitSelector'
 import * as L from './components/layout/AppShell.styles'
+import MasterVolume from './components/MasterVolume/MasterVolume'
 import PadBrowser from './components/PadBrowser/PadBrowser'
 import PadGrid from './components/PadGrid/PadGrid'
 import ParametricEQ from './components/ParametricEQ/ParametricEQ'
+import PianoRoll from './components/PianoRoll/PianoRoll'
 import SampleEditor from './components/SampleEditor/SampleEditor'
 import SampleInfo from './components/SampleInfo/SampleInfo'
 import Sequencer from './components/Sequencer/Sequencer'
 import Timeline from './components/Timeline/Timeline'
 import Transport from './components/Transport/Transport'
-import type { PersistedSample, TimelineTrack } from './storage/local'
-import { arrayBufferToBase64, base64ToArrayBuffer, loadAllKitNames, loadBpm, loadMetronomeEnabled, loadPatternByIndex, loadSamples, loadSamplesForSet, loadSwing, loadTimeline, saveBpm, saveKitName, saveMetronomeEnabled, savePatternByIndex, saveSamples, saveSamplesForSet, saveSwing, saveTimeline } from './storage/local'
+import type { PersistedSample, PersistedSynth, TimelineTrack } from './storage/local'
+import { arrayBufferToBase64, base64ToArrayBuffer, loadAllKitNames, loadBpm, loadMetronomeEnabled, loadPatternByIndex, loadSamples, loadSamplesForSet, loadSwing, loadSynthsForSet, loadTimeline, saveBpm, saveKitName, saveMetronomeEnabled, savePatternByIndex, saveSamples, saveSamplesForSet, saveSwing, saveSynthsForSet, saveTimeline } from './storage/local'
 import { GlobalStyles } from './styles/GlobalStyles'
 import { theme } from './styles/theme'
+import { getDrumKitPreset, getDrumKitSampleUrls } from './utils/drumKits'
 
 function App() {
   const engineRef = useRef<AudioEngine | null>(null)
@@ -32,7 +39,10 @@ function App() {
   const [activePad, setActivePad] = useState<number | undefined>(undefined)
   const [activePads, setActivePads] = useState<number[]>([])
   const [padNames, setPadNames] = useState<Record<number, string | undefined>>({})
+  const [padInstruments, setPadInstruments] = useState<Record<number, InstrumentType>>({})
   const [matrix, setMatrix] = useState<boolean[][]>(() => Array.from({ length: 16 }, () => Array(16).fill(false)))
+  const [synthNotes, setSynthNotes] = useState<Record<number, TB303Note[]>>({})
+  const [synthPatches, setSynthPatches] = useState<Record<number, TB303Patch>>({})
   const [steps, setSteps] = useState<number>(16)
   const [patternIndex, setPatternIndex] = useState<number>(1)
   const [arrangementOn, setArrangementOn] = useState<boolean>(false)
@@ -40,6 +50,7 @@ function App() {
   // const [totalSteps, setTotalSteps] = useState<number>(0)
   const [kitIndex, setKitIndex] = useState<number>(1)
   const [kitNames, setKitNames] = useState<string[]>(() => loadAllKitNames())
+  const [currentPresetId, setCurrentPresetId] = useState<string | undefined>(undefined)
   const [selectedPad, setSelectedPad] = useState<number>(0)
   const [controls, setControls] = useState({ warp: false, quantize: true, loop: false, hold: false })
   const [view, setView] = useState<'mpc' | 'timeline' | 'chat'>('mpc')
@@ -49,12 +60,14 @@ function App() {
     { name: 'Bass', clips: [] },
     { name: 'Synth', clips: [] },
   ])
+  const [masterVolume, setMasterVolume] = useState<number>(0.8)
   const [selectedMeta, setSelectedMeta] = useState<{ 
     duration?: number; 
     sampleRate?: number; 
     channels?: number; 
     pcm?: Float32Array | null;
     pitch?: number;
+    gain?: number;
     attack?: number; 
     decay?: number; 
     sustain?: number; 
@@ -227,6 +240,7 @@ function App() {
         channels: sample.audioBuffer.numberOfChannels, 
         pcm: ch0,
         pitch: sample.pitchSemitones,
+        gain: sample.gain,
         attack: sample.attack, 
         decay: sample.decay, 
         sustain: sample.sustain, 
@@ -293,13 +307,18 @@ function App() {
     // TODO: wire into AudioEngine per-pad settings if needed
   }, [])
 
-  const onChangeSampleInfo = useCallback((changes: Partial<{ pitch: number; attack: number; decay: number; sustain: number; release: number }>) => {
+  const onChangeSampleInfo = useCallback((changes: Partial<{ pitch: number; gain: number; attack: number; decay: number; sustain: number; release: number }>) => {
     const e = engineRef.current
     if (!e) return
     if (changes.pitch !== undefined) {
       e.setPadPitch(selectedPad, changes.pitch)
       // Immediately update state
       setSelectedMeta((prev) => ({ ...prev, pitch: changes.pitch }))
+    }
+    if (changes.gain !== undefined) {
+      e.setPadGain(selectedPad, changes.gain)
+      // Immediately update state
+      setSelectedMeta((prev) => ({ ...prev, gain: changes.gain }))
     }
     if (changes.attack !== undefined || changes.decay !== undefined || changes.sustain !== undefined || changes.release !== undefined) {
       e.setPadAdsr(selectedPad, { attack: changes.attack, decay: changes.decay, sustain: changes.sustain, release: changes.release })
@@ -347,6 +366,8 @@ function App() {
     const e = engineRef.current
     if (!e) return
     const samples: PersistedSample[] = []
+    const synths: PersistedSynth[] = []
+    
     for (let i = 0; i < 16; i++) {
       const s = e.getSampleForPad(i)
       if (s?.arrayBuffer) {
@@ -365,26 +386,63 @@ function App() {
           hold: s.hold ?? false,
         })
       }
+      
+      const synth = e.getSynthForPad(i)
+      if (synth) {
+        synths.push({
+          id: `pad-${i}`,
+          type: synth.type,
+          name: synth.name,
+          patch: synth.patch,
+          notes: synth.notes,
+        })
+      }
     }
     saveSamplesForSet(kitId, samples)
+    saveSynthsForSet(kitId, synths)
   }, [])
 
   const loadKit = useCallback((kitId: number) => {
     const e = engineRef.current
     if (!e) return
-    const list = loadSamplesForSet(kitId)
-    // Clear current pad names
+    
+    // Clear all pads from the engine and state
+    e.clearAllPads()
     setPadNames({})
-    ;(async () => {
-      for (const s of list) {
-        const padIndex = Number(s.id.replace('pad-', ''))
-        const ab = base64ToArrayBuffer(s.arrayBufferBase64)
-        await e.loadArrayBufferToPad(padIndex, ab, s.name)
-        e.setPadPitch(padIndex, s.pitchSemitones ?? 0)
-        e.setPadAdsr(padIndex, { attack: (s as PersistedSample).attack, decay: (s as PersistedSample).decay, sustain: (s as PersistedSample).sustain, release: (s as PersistedSample).release })
-        setPadNames((prev) => ({ ...prev, [padIndex]: s.name }))
+    setPadInstruments({})
+    setSynthNotes({})
+    setSynthPatches({})
+    
+    const sampleList = loadSamplesForSet(kitId)
+    const synthList = loadSynthsForSet(kitId)
+    
+    // Load samples
+    if (sampleList.length > 0) {
+      ;(async () => {
+        for (const s of sampleList) {
+          const padIndex = Number(s.id.replace('pad-', ''))
+          const ab = base64ToArrayBuffer(s.arrayBufferBase64)
+          await e.loadArrayBufferToPad(padIndex, ab, s.name)
+          e.setPadPitch(padIndex, s.pitchSemitones ?? 0)
+          e.setPadAdsr(padIndex, { attack: (s as PersistedSample).attack, decay: (s as PersistedSample).decay, sustain: (s as PersistedSample).sustain, release: (s as PersistedSample).release })
+          setPadNames((prev) => ({ ...prev, [padIndex]: s.name }))
+        }
+      })()
+    }
+    
+    // Load synths
+    if (synthList.length > 0) {
+      for (const synth of synthList) {
+        const padIndex = Number(synth.id.replace('pad-', ''))
+        e.assignSynthToPad(padIndex, synth.type)
+        e.updateSynthPatch(padIndex, synth.patch)
+        e.updateSynthNotes(padIndex, synth.notes)
+        setPadNames((prev) => ({ ...prev, [padIndex]: synth.name }))
+        setPadInstruments((prev) => ({ ...prev, [padIndex]: synth.type }))
+        setSynthNotes((prev) => ({ ...prev, [padIndex]: synth.notes }))
+        setSynthPatches((prev) => ({ ...prev, [padIndex]: synth.patch }))
       }
-    })()
+    }
   }, [])
 
   // Arrangement playback: switch pattern at bar boundaries
@@ -411,6 +469,61 @@ function App() {
     e.assignSliceToPad(padIndex, name, existing.audioBuffer, existing.arrayBuffer, startSec, durationSec)
     setPadNames((prev) => ({ ...prev, [padIndex]: name }))
   }, [])
+
+  const onSelectInstrument = useCallback((type: InstrumentType) => {
+    const e = engineRef.current
+    if (!e || selectedPad === undefined) return
+
+    if (type === 'tb303') {
+      e.assignSynthToPad(selectedPad, 'tb303')
+      setPadNames((prev) => ({ ...prev, [selectedPad]: 'TB-303' }))
+      setPadInstruments((prev) => ({ ...prev, [selectedPad]: 'tb303' }))
+      setSynthNotes((prev) => ({ ...prev, [selectedPad]: [] }))
+      setSynthPatches((prev) => ({ ...prev, [selectedPad]: defaultTB303Patch }))
+    } else {
+      // Clear synth and set to sample mode
+      e.clearPad(selectedPad)
+      setPadNames((prev) => {
+        const next = { ...prev }
+        delete next[selectedPad]
+        return next
+      })
+      setPadInstruments((prev) => {
+        const next = { ...prev }
+        delete next[selectedPad]
+        return next
+      })
+      setSynthNotes((prev) => {
+        const next = { ...prev }
+        delete next[selectedPad]
+        return next
+      })
+      setSynthPatches((prev) => {
+        const next = { ...prev }
+        delete next[selectedPad]
+        return next
+      })
+    }
+  }, [selectedPad])
+
+  const onSynthNotesChange = useCallback((notes: TB303Note[]) => {
+    const e = engineRef.current
+    if (!e) return
+    
+    e.updateSynthNotes(selectedPad, notes)
+    setSynthNotes((prev) => ({ ...prev, [selectedPad]: notes }))
+  }, [selectedPad])
+
+  const onSynthPatchChange = useCallback((patch: Partial<TB303Patch>) => {
+    const e = engineRef.current
+    if (!e || selectedPad === undefined) return
+    
+    e.updateSynthPatch(selectedPad, patch)
+    setSynthPatches((prev) => ({ 
+      ...prev, 
+      [selectedPad]: { ...(prev[selectedPad] ?? defaultTB303Patch), ...patch } 
+    }))
+  }, [selectedPad])
 
   // Install key handlers (after callbacks are defined)
   useEffect(() => {
@@ -447,6 +560,40 @@ function App() {
     })
   }, [])
 
+  const handleLoadPreset = useCallback(async (presetId: string) => {
+    const e = engineRef.current
+    if (!e) return
+    
+    const preset = getDrumKitPreset(presetId)
+    if (!preset) return
+    
+    // Clear all pads from the engine and state
+    e.clearAllPads()
+    setPadNames({})
+    setPadInstruments({})
+    setSynthNotes({})
+    setSynthPatches({})
+    
+    // Get sample URLs for this preset
+    const sampleUrls = getDrumKitSampleUrls(presetId)
+    
+    // Load samples from URLs
+    const loadedPads = await e.loadSamplesFromUrls(sampleUrls)
+    
+    // Update pad names in state
+    const newPadNames: Record<number, string | undefined> = {}
+    loadedPads.forEach((name, padIndex) => {
+      newPadNames[padIndex] = name
+    })
+    setPadNames(newPadNames)
+    
+    // Update the current kit name to match the preset
+    handleKitNameChange(kitIndex, preset.name)
+    
+    // Track the current preset ID
+    setCurrentPresetId(presetId)
+  }, [kitIndex, handleKitNameChange])
+
   return (
     <ThemeProvider theme={theme}>
       <GlobalStyles />
@@ -463,6 +610,19 @@ function App() {
               </L.Main>
             </L.Header>
           </div>
+          <KitSelector
+            currentKit={kitIndex}
+            kitNames={kitNames}
+            onKitChange={handleKitChange}
+            onKitNameChange={handleKitNameChange}
+            onLoadPreset={handleLoadPreset}
+            currentPresetId={currentPresetId}
+          />
+          <InstrumentSelector
+            selectedPad={selectedPad}
+            currentInstrument={padInstruments[selectedPad]}
+            onSelectInstrument={onSelectInstrument}
+          />
           <PadBrowser padNames={padNames} activePads={activePads} onSelectPad={setSelectedPad} onTriggerPad={onTriggerPad} />
         </L.Sidebar>
         <L.Header>
@@ -481,6 +641,7 @@ function App() {
                 channels={selectedMeta.channels}
                 pcmData={selectedMeta.pcm ?? null}
                 pitch={selectedMeta.pitch ?? 0}
+                gain={selectedMeta.gain ?? 1.0}
                 attack={selectedMeta.attack ?? 0.005}
                 decay={selectedMeta.decay ?? 0.05}
                 sustain={selectedMeta.sustain ?? 0.8}
@@ -507,24 +668,27 @@ function App() {
               onChange={onChangeEffectSlot}
             />
           </L.HalfRow>
-          <L.FullRow>
-            <KitSelector
-              currentKit={kitIndex}
-              kitNames={kitNames}
-              onKitChange={handleKitChange}
-              onKitNameChange={handleKitNameChange}
-            />
-          </L.FullRow>
           <PadGrid activePad={activePad} activePads={activePads} padNames={padNames} onDropSample={onDropSample} onTriggerPad={onTriggerPad} />
-          <Sequencer
-            matrix={matrix}
-            currentStep={currentStep}
-            steps={steps}
-            onToggle={onToggleStep}
-            patternNumber={patternIndex}
-            padNames={padNames}
-            onPatternChange={onPatternChange}
-          />
+          {padInstruments[selectedPad] === 'tb303' ? (
+            <PianoRoll
+              notes={synthNotes[selectedPad] ?? []}
+              patch={synthPatches[selectedPad] ?? defaultTB303Patch}
+              steps={steps}
+              currentStep={currentStep}
+              onNotesChange={onSynthNotesChange}
+              onPatchChange={onSynthPatchChange}
+            />
+          ) : (
+            <Sequencer
+              matrix={matrix}
+              currentStep={currentStep}
+              steps={steps}
+              onToggle={onToggleStep}
+              patternNumber={patternIndex}
+              padNames={padNames}
+              onPatternChange={onPatternChange}
+            />
+          )}
           <L.FullRow>
             <SampleEditor onAssignSlice={onAssignSlice} />
           </L.FullRow>
@@ -563,6 +727,12 @@ function App() {
             </L.FullRow>
           )}
         </L.Main>
+        <L.RightSidebar>
+          <MasterVolume value={masterVolume} onChange={(v) => {
+            setMasterVolume(v)
+            engineRef.current?.setMasterVolume(v)
+          }} />
+        </L.RightSidebar>
         <L.Footer>© {new Date().getFullYear()} Browser MPC</L.Footer>
       </L.Shell>
     </ThemeProvider>

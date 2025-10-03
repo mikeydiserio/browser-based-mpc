@@ -1,4 +1,5 @@
 import { useCallback, useState } from 'react';
+import { DRUM_KIT_PRESETS } from '../../utils/drumKits';
 import * as S from './KitSelector.styles';
 
 type Props = {
@@ -6,11 +7,21 @@ type Props = {
   kitNames: string[];
   onKitChange: (kitIndex: number) => void;
   onKitNameChange: (kitIndex: number, name: string) => void;
+  onLoadPreset?: (presetId: string) => void;
+  currentPresetId?: string;
 };
 
-export function KitSelector({ currentKit, kitNames, onKitChange, onKitNameChange }: Props) {
+export function KitSelector({ 
+  currentKit, 
+  kitNames, 
+  onKitChange, 
+  onKitNameChange, 
+  onLoadPreset,
+  currentPresetId 
+}: Props) {
   const [isEditing, setIsEditing] = useState(false);
   const [editValue, setEditValue] = useState('');
+  const [imageErrors, setImageErrors] = useState<Record<string, boolean>>({});
 
   const handleNameClick = useCallback(() => {
     setEditValue(kitNames[currentKit - 1] || `Kit ${currentKit}`);
@@ -42,37 +53,83 @@ export function KitSelector({ currentKit, kitNames, onKitChange, onKitNameChange
     []
   );
 
+  const handlePresetClick = useCallback(
+    (presetId: string) => {
+      if (onLoadPreset) {
+        onLoadPreset(presetId);
+      }
+    },
+    [onLoadPreset]
+  );
+
+  const handleImageError = useCallback((presetId: string) => {
+    setImageErrors(prev => ({ ...prev, [presetId]: true }));
+  }, []);
+
   return (
     <S.Container>
-      {isEditing ? (
-        <S.KitNameInput
-          type="text"
-          value={editValue}
-          onChange={handleNameChange}
-          onBlur={handleNameBlur}
-          onKeyDown={handleNameKeyDown}
-          autoFocus
-          onFocus={(e) => e.target.select()}
-        />
-      ) : (
-        <S.KitNameInput
-          type="text"
-          value={kitNames[currentKit - 1] || `Kit ${currentKit}`}
-          onClick={handleNameClick}
-          readOnly
-        />
+      <S.Section>
+        <S.Label>User Kits</S.Label>
+        <S.KitRow>
+          {isEditing ? (
+            <S.KitNameInput
+              type="text"
+              value={editValue}
+              onChange={handleNameChange}
+              onBlur={handleNameBlur}
+              onKeyDown={handleNameKeyDown}
+              autoFocus
+              onFocus={(e) => e.target.select()}
+            />
+          ) : (
+            <S.KitNameInput
+              type="text"
+              value={kitNames[currentKit - 1] || `Kit ${currentKit}`}
+              onClick={handleNameClick}
+              readOnly
+            />
+          )}
+          <S.KitSelector>
+            {Array.from({ length: 8 }, (_, i) => i + 1).map((kitNum) => (
+              <S.KitButton
+                key={kitNum}
+                $active={kitNum === currentKit}
+                onClick={() => onKitChange(kitNum)}
+              >
+                {kitNum}
+              </S.KitButton>
+            ))}
+          </S.KitSelector>
+        </S.KitRow>
+      </S.Section>
+      
+      {onLoadPreset && (
+        <S.Section>
+          <S.Label>Drum Machines</S.Label>
+          <S.PresetList>
+            {DRUM_KIT_PRESETS.map((preset) => (
+              <S.PresetItem
+                key={preset.id}
+                onClick={() => handlePresetClick(preset.id)}
+                $active={currentPresetId === preset.id}
+              >
+                {imageErrors[preset.id] ? (
+                  <S.PresetImagePlaceholder>
+                    No Img
+                  </S.PresetImagePlaceholder>
+                ) : (
+                  <S.PresetImage
+                    src={preset.image}
+                    alt={preset.name}
+                    onError={() => handleImageError(preset.id)}
+                  />
+                )}
+                <S.PresetName>{preset.name}</S.PresetName>
+              </S.PresetItem>
+            ))}
+          </S.PresetList>
+        </S.Section>
       )}
-      <S.KitSelector>
-        {Array.from({ length: 8 }, (_, i) => i + 1).map((kitNum) => (
-          <S.KitButton
-            key={kitNum}
-            $active={kitNum === currentKit}
-            onClick={() => onKitChange(kitNum)}
-          >
-            {kitNum}
-          </S.KitButton>
-        ))}
-      </S.KitSelector>
     </S.Container>
   );
 }

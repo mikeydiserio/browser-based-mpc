@@ -4,6 +4,7 @@ const BPM_KEY = "mpc.bpm.v1";
 const SWING_KEY = "mpc.swing.v1";
 const TIMELINE_KEY = "mpc.timeline.v1";
 const METRONOME_KEY = "mpc.metronome.v1";
+const SYNTHS_KEY = "mpc.synths.v1";
 
 export type PersistedSample = {
   id: string;
@@ -18,6 +19,32 @@ export type PersistedSample = {
   quantize: boolean;
   loop: boolean;
   hold: boolean;
+};
+
+export type TB303Note = {
+  note: number;
+  startStep: number;
+  duration: number;
+  accent: boolean;
+  slide: boolean;
+};
+
+export type TB303Patch = {
+  waveform: "sawtooth" | "square";
+  cutoff: number;
+  resonance: number;
+  envMod: number;
+  decay: number;
+  accent: number;
+  volume: number;
+};
+
+export type PersistedSynth = {
+  id: string;
+  type: "tb303";
+  name: string;
+  patch: TB303Patch;
+  notes: TB303Note[];
 };
 
 export type PersistedPattern = {
@@ -143,4 +170,23 @@ export function loadKitName(kitIndex: number): string {
 
 export function loadAllKitNames(): string[] {
   return Array.from({ length: 8 }, (_, i) => loadKitName(i + 1));
+}
+
+// Synth persistence
+export function saveSynths(synths: PersistedSynth[]) {
+  localStorage.setItem(SYNTHS_KEY, JSON.stringify(synths));
+}
+
+export function loadSynths(): PersistedSynth[] {
+  const raw = localStorage.getItem(SYNTHS_KEY);
+  return raw ? JSON.parse(raw) : [];
+}
+
+export function saveSynthsForSet(setId: number, synths: PersistedSynth[]) {
+  localStorage.setItem(`${SYNTHS_KEY}.set${setId}`, JSON.stringify(synths));
+}
+
+export function loadSynthsForSet(setId: number): PersistedSynth[] {
+  const raw = localStorage.getItem(`${SYNTHS_KEY}.set${setId}`);
+  return raw ? JSON.parse(raw) : [];
 }

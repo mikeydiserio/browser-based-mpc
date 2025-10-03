@@ -12,6 +12,7 @@ type Props = {
   channels?: number
   pcmData?: Float32Array | null
   pitch?: number
+  gain?: number
   attack?: number
   decay?: number
   sustain?: number
@@ -21,11 +22,11 @@ type Props = {
   quantize?: boolean
   loop?: boolean
   hold?: boolean
-  onChange?: (changes: Partial<{ pitch: number; attack: number; decay: number; sustain: number; release: number }>) => void
+  onChange?: (changes: Partial<{ pitch: number; gain: number; attack: number; decay: number; sustain: number; release: number }>) => void
   onControlsChange?: (changes: Partial<{ warp: boolean; quantize: boolean; loop: boolean; hold: boolean }>) => void
 }
 
-export function SampleInfo({ padIndex, name, durationSec, sampleRate, channels, pcmData, pitch = 0, attack = 0.005, decay = 0.05, sustain = 0.8, release = 0.08, eq, warp = false, quantize = true, loop = false, hold = false, onChange, onControlsChange }: Props) {
+export function SampleInfo({ padIndex, name, durationSec, sampleRate, channels, pcmData, pitch = 0, gain = 1.0, attack = 0.005, decay = 0.05, sustain = 0.8, release = 0.08, eq, warp = false, quantize = true, loop = false, hold = false, onChange, onControlsChange }: Props) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
 
   const downsampled = useMemo(() => {
@@ -179,6 +180,7 @@ export function SampleInfo({ padIndex, name, durationSec, sampleRate, channels, 
         <S.MetaItem>Channels: <span>{channels ?? '-'}</span></S.MetaItem>
       </S.MetaGrid>
       <S.KnobRow>
+        <Knob label="Gain" min={0} max={2} step={0.01} value={gain} onChange={(v) => onChange?.({ gain: v })} format={(v) => `${(v * 100).toFixed(0)}%`} />
         <Knob label="Pitch" min={-24} max={24} step={1} value={pitch} onChange={(v) => onChange?.({ pitch: v })} format={(v) => `${v} st`} />
         <Knob label="Attack" min={0} max={1} step={0.005} value={attack} onChange={(v) => onChange?.({ attack: v })} format={(v) => `${v.toFixed(3)}s`} />
         <Knob label="Decay" min={0} max={2} step={0.01} value={decay} onChange={(v) => onChange?.({ decay: v })} format={(v) => `${v.toFixed(2)}s`} />

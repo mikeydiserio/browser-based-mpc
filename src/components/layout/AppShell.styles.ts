@@ -3,11 +3,11 @@ import styled from "styled-components";
 export const Shell = styled.div`
   display: grid;
   grid-template-rows: auto 1fr auto;
-  grid-template-columns: 200px 1fr;
+  grid-template-columns: 320px 1fr 120px;
   grid-template-areas:
-    "sidebar header"
-    "sidebar main"
-    "sidebar footer";
+    "sidebar header rightsidebar"
+    "sidebar main rightsidebar"
+    "sidebar footer rightsidebar";
   min-height: 100vh;
 `;
 
@@ -19,6 +19,18 @@ export const Sidebar = styled.aside`
   box-shadow: ${({ theme }) => theme.shadows.inset};
   display: grid;
   grid-auto-rows: max-content;
+  gap: 8px;
+`;
+
+export const RightSidebar = styled.aside`
+  grid-area: rightsidebar;
+  background: ${({ theme }) => theme.colors.panel};
+  border-left: 1px solid ${({ theme }) => theme.colors.gridLine};
+  padding: ${({ theme }) => theme.spacing(1)};
+  box-shadow: ${({ theme }) => theme.shadows.inset};
+  display: flex;
+  flex-direction: column;
+  align-items: center;
   gap: 8px;
 `;
 
