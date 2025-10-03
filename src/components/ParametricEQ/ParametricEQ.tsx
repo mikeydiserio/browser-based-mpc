@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef } from "react";
 import type { EQBand } from "../../audio/eq";
 import { Knob } from "../Knob/Knob";
+import { EQCurve } from "./EQCurve";
 import * as S from "./ParametricEQ.styles";
 
 type Props = {
@@ -98,6 +99,13 @@ export function ParametricEQ({ eqBands, onChange, showCurve = false, onShowCurve
           </S.Band>
         ))}
       </S.BandsGrid>
+      {showCurve && (
+        <EQCurve 
+          eqBands={eqBands}
+          width={380}
+          height={160}
+        />
+      )}
     </S.Container>
   );
 }

@@ -9,7 +9,6 @@ export const Container = styled.div`
   display: grid;
   gap: 4px;
   max-width: 400px;
-  max-height: 300px;
   width: fit-content;
 `;
 
