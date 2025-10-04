@@ -256,6 +256,10 @@ export class AudioEngine {
     const secondsPerBeat = 60.0 / this.bpm;
     const quarterNote = secondsPerBeat;
     switch (delayTime) {
+      case "quarter":
+        return quarterNote;
+      case "half":
+        return quarterNote * 2;
       case "8th":
         return quarterNote / 2;
       case "16th":

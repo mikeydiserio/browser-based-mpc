@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import type { TB303Note, TB303Patch } from '../../audio/TB303Synth';
 import Knob from '../Knob/Knob';
 import * as S from './PianoRoll.styles';
@@ -10,6 +10,9 @@ type Props = {
   currentStep: number;
   onNotesChange: (notes: TB303Note[]) => void;
   onPatchChange: (patch: Partial<TB303Patch>) => void;
+  isPlaying: boolean;
+  onTogglePlay: () => void;
+  bpm: number;
 };
 
 // MIDI notes for 2 octaves (C2 to B3) - good range for bass
@@ -28,8 +31,10 @@ function getNoteName(midiNote: number): string {
   return `${NOTE_NAMES[pitchClass]}${octave}`;
 }
 
-export function PianoRoll({ notes, patch, steps, currentStep, onNotesChange, onPatchChange }: Props) {
+export function PianoRoll({ notes, patch, steps, currentStep, onNotesChange, onPatchChange, isPlaying, onTogglePlay }: Props) {
   const [selectedTool, setSelectedTool] = useState<'draw' | 'accent' | 'slide'>('draw');
+  const [resizingNote, setResizingNote] = useState<{ note: number; step: number; initialDuration: number } | null>(null);
+  const gridRef = useRef<HTMLDivElement>(null);
 
   const midiNotes = useMemo(() => {
     return Array.from({ length: NOTE_COUNT }, (_, i) => START_NOTE + NOTE_COUNT - 1 - i);
@@ -61,19 +66,66 @@ export function PianoRoll({ notes, patch, steps, currentStep, onNotesChange, onP
     }
   }, [notes, selectedTool, onNotesChange]);
 
-  const hasNote = useCallback((note: number, step: number) => {
-    return notes.some(n => n.note === note && n.startStep === step);
-  }, [notes]);
-
   const getNote = useCallback((note: number, step: number) => {
     return notes.find(n => n.note === note && n.startStep === step);
   }, [notes]);
 
+  const handleResizeStart = useCallback((e: React.MouseEvent, note: number, step: number) => {
+    e.stopPropagation();
+    const noteData = getNote(note, step);
+    if (noteData) {
+      setResizingNote({ note, step, initialDuration: noteData.duration });
+    }
+  }, [getNote]);
+
+  const handleMouseMove = useCallback((e: React.MouseEvent) => {
+    if (!resizingNote || !gridRef.current) return;
+
+    const gridRect = gridRef.current.getBoundingClientRect();
+    const cellWidth = gridRect.width / steps;
+    const mouseX = e.clientX - gridRect.left;
+    const currentStepPosition = Math.max(0, Math.floor(mouseX / cellWidth));
+    
+    const newDuration = Math.max(1, Math.min(steps - resizingNote.step, currentStepPosition - resizingNote.step + 1));
+    
+    const noteIndex = notes.findIndex(n => n.note === resizingNote.note && n.startStep === resizingNote.step);
+    if (noteIndex >= 0 && notes[noteIndex].duration !== newDuration) {
+      const updated = [...notes];
+      updated[noteIndex] = { ...updated[noteIndex], duration: newDuration };
+      onNotesChange(updated);
+    }
+  }, [resizingNote, notes, steps, onNotesChange]);
+
+  const handleMouseUp = useCallback(() => {
+    setResizingNote(null);
+  }, []);
+
+  const isNoteCell = useCallback((note: number, step: number) => {
+    // Check if this cell is part of a note (either start or continuation)
+    return notes.find(n => 
+      n.note === note && 
+      step >= n.startStep && 
+      step < n.startStep + n.duration
+    );
+  }, [notes]);
+
+  const isNoteStart = useCallback((note: number, step: number) => {
+    // Check if this cell is the start of a note
+    return notes.find(n => n.note === note && n.startStep === step);
+  }, [notes]);
+
   return (
-    <S.Container>
+    <S.Container
+      onMouseMove={resizingNote ? handleMouseMove : undefined}
+      onMouseUp={resizingNote ? handleMouseUp : undefined}
+      onMouseLeave={resizingNote ? handleMouseUp : undefined}
+    >
       <S.Header>
         <S.Title>TB-303 Piano Roll</S.Title>
         <S.Controls>
+          <S.Button onClick={onTogglePlay} $active={isPlaying}>
+            {isPlaying ? '⏸' : '▶'} {isPlaying ? 'Stop' : 'Play'}
+          </S.Button>
           <S.Button $active={selectedTool === 'draw'} onClick={() => setSelectedTool('draw')}>
             Draw
           </S.Button>
@@ -95,29 +147,43 @@ export function PianoRoll({ notes, patch, steps, currentStep, onNotesChange, onP
           ))}
         </S.PianoKeys>
 
-        <S.RollGrid $steps={steps}>
+        <S.RollGrid $steps={steps} ref={gridRef}>
           {midiNotes.flatMap((note) =>
             stepIndices.map((step) => {
-              const noteData = getNote(note, step);
-              const hasNoteHere = hasNote(note, step);
+              const noteInCell = isNoteCell(note, step);
+              const noteStart = isNoteStart(note, step);
               const isLit = step === currentStep;
               const isAccent = step % 4 === 0;
-              const showAccent = !!(noteData?.accent && selectedTool === 'accent');
-              const showSlide = !!(noteData?.slide && selectedTool === 'slide');
+              const showAccent = !!(noteInCell?.accent && selectedTool === 'accent');
+              const showSlide = !!(noteInCell?.slide && selectedTool === 'slide');
+              
+              // Don't render cells that are part of a note but not the start
+              if (noteInCell && !noteStart) {
+                return null;
+              }
               
               return (
                 <S.Cell
                   key={`${note}-${step}`}
-                  $hasNote={hasNoteHere || showAccent || showSlide}
+                  $hasNote={!!noteInCell}
                   $lit={isLit}
                   $isAccent={isAccent}
                   $isBlack={isBlackKey(note)}
+                  $duration={noteStart?.duration || 1}
                   onClick={() => toggleNote(note, step)}
                   style={{
                     opacity: showAccent ? 1 : showSlide ? 0.7 : 1,
                     borderWidth: showSlide ? '2px' : '1px',
+                    cursor: resizingNote ? 'ew-resize' : 'pointer',
                   }}
-                />
+                >
+                  {noteStart && (
+                    <S.ResizeHandle
+                      onMouseDown={(e: React.MouseEvent) => handleResizeStart(e, note, step)}
+                      style={{ cursor: 'ew-resize' }}
+                    />
+                  )}
+                </S.Cell>
               );
             })
           )}
@@ -187,4 +253,3 @@ export function PianoRoll({ notes, patch, steps, currentStep, onNotesChange, onP
 }
 
 export default PianoRoll;
-

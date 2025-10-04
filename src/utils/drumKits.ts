@@ -11,8 +11,8 @@ export const DRUM_KIT_PRESETS: DrumKitPreset[] = [
   {
     id: "akai-linndrum",
     name: "Akai Linndrum",
-    path: "/drum-machines/Akai Linndrum",
-    image: "/drum-machines/Akai Linndrum/machine.jpg",
+    path: `${import.meta.env.BASE_URL}drum-machines/Akai Linndrum`,
+    image: `${import.meta.env.BASE_URL}drum-machines/Akai Linndrum/machine.jpg`,
     samples: [
       "Bassdrum.wav",
       "SD.wav",
@@ -32,8 +32,8 @@ export const DRUM_KIT_PRESETS: DrumKitPreset[] = [
   {
     id: "akai-mpc60",
     name: "Akai MPC-60",
-    path: "/drum-machines/Akai MPC-60",
-    image: "/drum-machines/Akai MPC-60/machine.jpg",
+    path: `${import.meta.env.BASE_URL}drum-machines/Akai MPC-60`,
+    image: `${import.meta.env.BASE_URL}drum-machines/Akai MPC-60/machine.jpg`,
     samples: [
       "Bassdrum.wav",
       "Bassdrum Gated.wav",
@@ -56,8 +56,8 @@ export const DRUM_KIT_PRESETS: DrumKitPreset[] = [
   {
     id: "oberheim-dmx",
     name: "Oberheim DMX",
-    path: "/drum-machines/Oberheim DMX",
-    image: "/drum-machines/Oberheim DMX/machine.jpg",
+    path: `${import.meta.env.BASE_URL}drum-machines/Oberheim DMX`,
+    image: `${import.meta.env.BASE_URL}drum-machines/Oberheim DMX/machine.jpg`,
     samples: [
       "Bassdrum-01.wav",
       "Bassdrum-02.wav",
@@ -80,8 +80,8 @@ export const DRUM_KIT_PRESETS: DrumKitPreset[] = [
   {
     id: "roland-tr606",
     name: "Roland TR-606",
-    path: "/drum-machines/Roland TR-606",
-    image: "/drum-machines/Roland TR-606/machine.jpg",
+    path: `${import.meta.env.BASE_URL}drum-machines/Roland TR-606`,
+    image: `${import.meta.env.BASE_URL}drum-machines/Roland TR-606/machine.jpg`,
     samples: [
       "Bassdrum.wav",
       "Snaredrum.wav",
@@ -95,8 +95,8 @@ export const DRUM_KIT_PRESETS: DrumKitPreset[] = [
   {
     id: "roland-tr707",
     name: "Roland TR-707",
-    path: "/drum-machines/Roland TR-707",
-    image: "/drum-machines/Roland TR-707/machine.jpg",
+    path: `${import.meta.env.BASE_URL}drum-machines/Roland TR-707`,
+    image: `${import.meta.env.BASE_URL}drum-machines/Roland TR-707/machine.jpg`,
     samples: [
       "Bassdrum-01.wav",
       "Bassdrum-02.wav",
@@ -117,8 +117,8 @@ export const DRUM_KIT_PRESETS: DrumKitPreset[] = [
   {
     id: "roland-tr808",
     name: "Roland TR-808",
-    path: "/drum-machines/Roland TR-808",
-    image: "/drum-machines/Roland TR-808/machine.jpg",
+    path: `${import.meta.env.BASE_URL}drum-machines/Roland TR-808`,
+    image: `${import.meta.env.BASE_URL}drum-machines/Roland TR-808/machine.jpg`,
     samples: [
       "Bassdrum-01.wav",
       "Bassdrum-02.wav",
@@ -141,8 +141,8 @@ export const DRUM_KIT_PRESETS: DrumKitPreset[] = [
   {
     id: "roland-tr909",
     name: "Roland TR-909",
-    path: "/drum-machines/Roland TR-909",
-    image: "/drum-machines/Roland TR-909/machine.jpg",
+    path: `${import.meta.env.BASE_URL}drum-machines/Roland TR-909`,
+    image: `${import.meta.env.BASE_URL}drum-machines/Roland TR-909/machine.jpg`,
     samples: [
       "Bassdrum-01.wav",
       "Bassdrum-02.wav",
@@ -163,8 +163,8 @@ export const DRUM_KIT_PRESETS: DrumKitPreset[] = [
   {
     id: "yamaha-rx5",
     name: "Yamaha RX-5",
-    path: "/drum-machines/Yamaha RX-5",
-    image: "/drum-machines/Yamaha RX-5/machine.jpg",
+    path: `${import.meta.env.BASE_URL}drum-machines/Yamaha RX-5`,
+    image: `${import.meta.env.BASE_URL}drum-machines/Yamaha RX-5/machine.jpg`,
     samples: [
       "Bassdrum.wav",
       "Bassdrum-02.wav",

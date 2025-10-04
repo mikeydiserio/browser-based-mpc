@@ -9,7 +9,13 @@ export type EffectType =
   | "compressor"
   | "limiter";
 
-export type DelayTime = "8th" | "16th" | "32nd" | "triplet";
+export type DelayTime =
+  | "quarter"
+  | "half"
+  | "8th"
+  | "16th"
+  | "32nd"
+  | "triplet";
 
 export type EffectSlot = {
   type: EffectType;
@@ -22,6 +28,9 @@ export type EffectSlot = {
   // Delay parameters
   delayTime?: DelayTime;
   delayFeedback?: number;
+  delayLeft?: number;
+  delayRight?: number;
+  delayPingPong?: boolean;
   // Distortion/Saturation parameters
   distortionAmount?: number;
   distortionTone?: number;
@@ -88,6 +97,9 @@ export function getDefaultParamsForEffect(
         dryWet: 0.3,
         delayTime: "16th",
         delayFeedback: 0.4,
+        delayLeft: 0.5,
+        delayRight: 0.5,
+        delayPingPong: false,
       };
     case "distortion":
       return {

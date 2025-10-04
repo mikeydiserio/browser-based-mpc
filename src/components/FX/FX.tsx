@@ -76,17 +76,44 @@ export function FX({ effectSlots, onChange }: Props) {
               onChange={(v) => handleParamChange(slotIndex, { delayFeedback: v })}
               format={(v) => `${Math.round(v * 100)}%`}
             />
+            <Knob
+              label="Left"
+              min={0}
+              max={1}
+              step={0.01}
+              value={effect.delayLeft ?? 0.5}
+              onChange={(v) => handleParamChange(slotIndex, { delayLeft: v })}
+              format={(v) => `${Math.round(v * 100)}%`}
+            />
+            <Knob
+              label="Right"
+              min={0}
+              max={1}
+              step={0.01}
+              value={effect.delayRight ?? 0.5}
+              onChange={(v) => handleParamChange(slotIndex, { delayRight: v })}
+              format={(v) => `${Math.round(v * 100)}%`}
+            />
             <S.DelayTimeButtons>
-              {(['8th', '16th', '32nd', 'triplet'] as DelayTime[]).map((time) => (
+              {(['quarter', 'half', '8th', '16th', '32nd', 'triplet'] as DelayTime[]).map((time) => (
                 <S.DelayTimeButton
                   key={time}
                   $active={effect.delayTime === time}
                   onClick={() => handleParamChange(slotIndex, { delayTime: time })}
                 >
-                  {time === 'triplet' ? '3' : time.replace('th', '')}
+                  {time === 'triplet' ? '3' : time === 'quarter' ? '1/4' : time === 'half' ? '1/2' : time.replace('th', '')}
                 </S.DelayTimeButton>
               ))}
             </S.DelayTimeButtons>
+            <S.PingPongCheckbox>
+              <input
+                type="checkbox"
+                id={`pingpong-${slotIndex}`}
+                checked={effect.delayPingPong ?? false}
+                onChange={(e) => handleParamChange(slotIndex, { delayPingPong: e.target.checked })}
+              />
+              <label htmlFor={`pingpong-${slotIndex}`}>Ping Pong</label>
+            </S.PingPongCheckbox>
           </>
         )}
         {(effect.type === 'distortion' || effect.type === 'saturation') && (

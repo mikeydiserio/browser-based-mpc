@@ -116,8 +116,10 @@ export const Cell = styled.div<{
   $hasNote: boolean;
   $lit?: boolean;
   $isBlack: boolean;
+  $duration?: number;
 }>`
   height: 20px;
+  grid-column: ${({ $duration }) => ($duration ? `span ${$duration}` : "1")};
   border-right: 1px solid
     ${({ $isAccent, $isBlack }) =>
       $isAccent
@@ -136,12 +138,34 @@ export const Cell = styled.div<{
   }};
   cursor: pointer;
   transition: background 0.05s ease;
+  position: relative;
 
   &:hover {
     background: ${({ theme, $hasNote, $isBlack }) => {
       if ($hasNote) return theme.colors.primary;
       return $isBlack ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.05)";
     }};
+  }
+`;
+
+export const ResizeHandle = styled.div`
+  position: absolute;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  width: 8px;
+  cursor: ew-resize;
+  background: rgba(255, 255, 255, 0.1);
+  opacity: 0;
+  transition: opacity 0.15s ease;
+
+  &:hover {
+    opacity: 1;
+    background: rgba(255, 255, 255, 0.3);
+  }
+
+  ${Cell}:hover & {
+    opacity: 0.7;
   }
 `;
 

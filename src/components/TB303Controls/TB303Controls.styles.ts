@@ -7,7 +7,7 @@ export const Container = styled.div`
   padding: 8px 10px;
   box-shadow: ${({ theme }) => theme.shadows.soft};
   display: grid;
-  gap: 6px;
+  gap: 8px;
 `;
 
 export const TitleRow = styled.div`
@@ -27,15 +27,28 @@ export const Name = styled.div`
   text-overflow: ellipsis;
 `;
 
-export const ToggleRow = styled.div`
-  display: flex;
-  gap: 4px;
-  align-items: center;
+export const Section = styled.div`
+  display: grid;
+  gap: 6px;
 `;
 
-export const ToggleButton = styled.button<{ $active: boolean }>`
-  padding: 3px 8px;
-  font-size: 9px;
+export const SectionTitle = styled.div`
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: ${({ theme }) => theme.colors.textSecondary};
+`;
+
+export const WaveformButtons = styled.div`
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+`;
+
+export const WaveformButton = styled.button<{ $active: boolean }>`
+  padding: 6px 10px;
+  font-size: 11px;
   font-weight: 600;
   text-transform: uppercase;
   background: ${({ theme, $active }) =>
@@ -61,37 +74,13 @@ export const ToggleButton = styled.button<{ $active: boolean }>`
   }
 `;
 
-export const MetaGrid = styled.div`
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 8px 10px;
-`;
-
-export const MetaItem = styled.div`
-  font-size: 11px;
-  color: ${({ theme }) => theme.colors.textSecondary};
-  span {
-    color: ${({ theme }) => theme.colors.textPrimary};
-  }
-`;
-
-export const WaveCanvas = styled.canvas`
-  width: 100%;
-  height: 64px;
-  background: ${({ theme }) => theme.colors.panel};
-  border: 1px solid ${({ theme }) => theme.colors.gridLine};
-  border-radius: ${({ theme }) => theme.radii.sm};
-`;
-
 export const KnobRow = styled.div`
   display: grid;
-  grid-template-columns: repeat(2, auto);
+  grid-template-columns: repeat(3, 1fr);
   gap: 10px;
-  justify-content: start;
-`;
 
-export const ADSRRow = styled.div`
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 10px;
+  &:has(> :only-child) {
+    grid-template-columns: auto;
+    justify-content: start;
+  }
 `;

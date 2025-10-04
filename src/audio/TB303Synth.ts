@@ -19,6 +19,7 @@ export type TB303Patch = {
   decay: number; // Envelope decay time in seconds
   accent: number; // Accent amount 0-1
   volume: number; // 0-1
+  noteLength: number; // 0-1, multiplier for note duration
 };
 
 export const defaultTB303Patch: TB303Patch = {
@@ -29,6 +30,7 @@ export const defaultTB303Patch: TB303Patch = {
   decay: 0.2,
   accent: 0.6,
   volume: 0.7,
+  noteLength: 0.5,
 };
 
 export class TB303Synth {
@@ -38,13 +40,20 @@ export class TB303Synth {
 
   constructor(
     audioContext: AudioContext,
-    patch: TB303Patch = defaultTB303Patch
+    patch: TB303Patch = defaultTB303Patch,
+    outputNode?: AudioNode
   ) {
     this.audioContext = audioContext;
     this.patch = { ...patch };
     this.masterGain = audioContext.createGain();
     this.masterGain.gain.value = this.patch.volume;
-    this.masterGain.connect(audioContext.destination);
+
+    // Connect to provided output node or default to audioContext.destination
+    if (outputNode) {
+      this.masterGain.connect(outputNode);
+    } else {
+      this.masterGain.connect(audioContext.destination);
+    }
   }
 
   setPatch(patch: Partial<TB303Patch>) {

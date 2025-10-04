@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import LoadingSpinner from '../LoadingSpinner/LoadingSpinner'
 import * as S from './PadGrid.styles'
 
 export type PadInfo = {
@@ -14,6 +15,7 @@ type PadGridProps = {
   onDropSample: (padIndex: number, file: File) => void
   onTriggerPad: (padIndex: number) => void
   onSelectPad?: (padIndex: number) => void
+  isLoading?: boolean
 }
 
 const defaultHotkeys = [
@@ -23,7 +25,7 @@ const defaultHotkeys = [
   'z','x','c','v'
 ]
 
-export function PadGrid({ activePad, activePads, padNames, onDropSample, onTriggerPad, onSelectPad: _onSelectPad }: PadGridProps) {
+export function PadGrid({ activePad, activePads, padNames, onDropSample, onTriggerPad, onSelectPad: _onSelectPad, isLoading }: PadGridProps) {
   const [isActive, setIsActive] = useState<number | null>(null)
 
   const handleDrop = useCallback((padIndex: number, e: React.DragEvent) => {
@@ -81,10 +83,9 @@ export function PadGrid({ activePad, activePads, padNames, onDropSample, onTrigg
           </S.Pad>
         )
       })}
+      {isLoading && <LoadingSpinner message="Loading drum kit..." />}
     </S.Container>
   )
 }
 
 export default PadGrid
-
-

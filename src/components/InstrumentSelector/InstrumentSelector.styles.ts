@@ -8,6 +8,7 @@ export const Container = styled.div`
   background: ${({ theme }) => theme.colors.surface};
   border-radius: 4px;
   border: 1px solid ${({ theme }) => theme.colors.border};
+  min-width: 0;
 `;
 
 export const SectionTitle = styled.div`
@@ -41,6 +42,7 @@ export const Item = styled.button<{ $active?: boolean; $selected?: boolean }>`
   color: ${({ theme, $selected }) =>
     $selected ? theme.colors.background : theme.colors.text};
   font-size: 13px;
+  min-width: 0;
 
   &:hover {
     background: ${({ theme, $selected }) =>
@@ -61,4 +63,8 @@ export const Name = styled.div`
   flex: 1;
   text-align: left;
   font-weight: 500;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 `;

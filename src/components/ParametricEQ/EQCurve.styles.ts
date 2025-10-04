@@ -1,7 +1,7 @@
 import styled from "styled-components";
 
 export const Container = styled.div`
-  background: ${({ theme }) => theme.colors.panelRecessed};
+  background: ${({ theme }) => theme.colors.panel};
   border: 1px solid ${({ theme }) => theme.colors.gridLine};
   border-radius: ${({ theme }) => theme.radii.sm};
   padding: 8px;
@@ -22,7 +22,7 @@ export const Title = styled.div`
 
 export const Canvas = styled.canvas`
   border: 1px solid ${({ theme }) => theme.colors.gridLine};
-  border-radius: ${({ theme }) => theme.radii.xs};
+  border-radius: ${({ theme }) => theme.radii.sm};
   background: #1e1e1e;
   cursor: crosshair;
 `;
@@ -38,7 +38,7 @@ export const LegendItem = styled.div<{ $enabled: boolean }>`
   display: flex;
   align-items: center;
   gap: 4px;
-  opacity: ${({ $enabled }) => $enabled ? 1 : 0.4};
+  opacity: ${({ $enabled }) => ($enabled ? 1 : 0.4)};
   transition: opacity 0.2s ease;
 `;
 

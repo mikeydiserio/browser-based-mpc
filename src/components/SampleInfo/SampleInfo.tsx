@@ -182,11 +182,13 @@ export function SampleInfo({ padIndex, name, durationSec, sampleRate, channels, 
       <S.KnobRow>
         <Knob label="Gain" min={0} max={2} step={0.01} value={gain} onChange={(v) => onChange?.({ gain: v })} format={(v) => `${(v * 100).toFixed(0)}%`} />
         <Knob label="Pitch" min={-24} max={24} step={1} value={pitch} onChange={(v) => onChange?.({ pitch: v })} format={(v) => `${v} st`} />
+      </S.KnobRow>
+      <S.ADSRRow>
         <Knob label="Attack" min={0} max={1} step={0.005} value={attack} onChange={(v) => onChange?.({ attack: v })} format={(v) => `${v.toFixed(3)}s`} />
         <Knob label="Decay" min={0} max={2} step={0.01} value={decay} onChange={(v) => onChange?.({ decay: v })} format={(v) => `${v.toFixed(2)}s`} />
         <Knob label="Sustain" min={0} max={1} step={0.01} value={sustain} onChange={(v) => onChange?.({ sustain: v })} format={(v) => v.toFixed(2)} />
         <Knob label="Release" min={0} max={2} step={0.01} value={release} onChange={(v) => onChange?.({ release: v })} format={(v) => `${v.toFixed(2)}s`} />
-      </S.KnobRow>
+      </S.ADSRRow>
     </S.Container>
   )
 }

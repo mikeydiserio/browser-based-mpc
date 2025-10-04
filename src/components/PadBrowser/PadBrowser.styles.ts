@@ -3,6 +3,7 @@ import styled from "styled-components";
 export const Container = styled.div`
   display: grid;
   gap: 8px;
+  min-width: 0;
 `;
 
 export const SectionTitle = styled.div`
@@ -28,8 +29,10 @@ export const Item = styled.li<{ $active?: boolean }>`
   border-radius: ${({ theme }) => theme.radii.sm};
   border: 1px solid ${({ theme }) => theme.colors.gridLine};
   background: ${({ theme }) => theme.colors.panel};
-  box-shadow: ${({ $active, theme }) => ($active ? `0 0 0 2px ${theme.colors.accentAlt}` : 'none')};
+  box-shadow: ${({ $active, theme }) =>
+    $active ? `0 0 0 2px ${theme.colors.accentAlt}` : "none"};
   cursor: pointer;
+  min-width: 0;
 `;
 
 export const PadBadge = styled.div<{ $active?: boolean }>`
@@ -42,7 +45,8 @@ export const PadBadge = styled.div<{ $active?: boolean }>`
   font-size: 11px;
   font-family: ${({ theme }) => theme.typography.mono};
   color: ${({ theme }) => theme.colors.textPrimary};
-  background: ${({ $active, theme }) => ($active ? theme.colors.accentAlt : theme.colors.pad)};
+  background: ${({ $active, theme }) =>
+    $active ? theme.colors.accentAlt : theme.colors.pad};
   border: 1px solid ${({ theme }) => theme.colors.gridLine};
 `;
 
@@ -53,5 +57,3 @@ export const Name = styled.div`
   overflow: hidden;
   text-overflow: ellipsis;
 `;
-
-

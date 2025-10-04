@@ -10,7 +10,6 @@ type Props = {
 
 const instruments = [
   { type: 'sample' as InstrumentType, name: 'Sample', icon: '🎵' },
-  { type: 'tb303' as InstrumentType, name: 'TB-303', icon: '🎹' },
 ];
 
 export function InstrumentSelector({ selectedPad, currentInstrument, onSelectInstrument }: Props) {

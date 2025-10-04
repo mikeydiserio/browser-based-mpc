@@ -6,7 +6,7 @@ import { createDefaultEffectsChain } from './audio/effects'
 import type { EQBand, EQSettings } from './audio/eq'
 import { createDefaultEQSettings } from './audio/eq'
 import type { TB303Note, TB303Patch } from './audio/TB303Synth'
-import { defaultTB303Patch } from './audio/TB303Synth'
+import { defaultTB303Patch, TB303Synth } from './audio/TB303Synth'
 import Chat from './components/Chat/Chat'
 import FX from './components/FX/FX'
 import type { InstrumentType } from './components/InstrumentSelector/InstrumentSelector'
@@ -14,6 +14,7 @@ import InstrumentSelector from './components/InstrumentSelector/InstrumentSelect
 import KitSelector from './components/KitSelector/KitSelector'
 import * as L from './components/layout/AppShell.styles'
 import MasterVolume from './components/MasterVolume/MasterVolume'
+import MixerChannel from './components/Mixer/MixerChannel'
 import PadBrowser from './components/PadBrowser/PadBrowser'
 import PadGrid from './components/PadGrid/PadGrid'
 import ParametricEQ from './components/ParametricEQ/ParametricEQ'
@@ -21,10 +22,11 @@ import PianoRoll from './components/PianoRoll/PianoRoll'
 import SampleEditor from './components/SampleEditor/SampleEditor'
 import SampleInfo from './components/SampleInfo/SampleInfo'
 import Sequencer from './components/Sequencer/Sequencer'
+import TB303Controls from './components/TB303Controls/TB303Controls'
 import Timeline from './components/Timeline/Timeline'
 import Transport from './components/Transport/Transport'
-import type { PersistedSample, PersistedSynth, TimelineTrack } from './storage/local'
-import { arrayBufferToBase64, base64ToArrayBuffer, loadAllKitNames, loadBpm, loadMetronomeEnabled, loadPatternByIndex, loadSamples, loadSamplesForSet, loadSwing, loadSynthsForSet, loadTimeline, saveBpm, saveKitName, saveMetronomeEnabled, savePatternByIndex, saveSamples, saveSamplesForSet, saveSwing, saveSynthsForSet, saveTimeline } from './storage/local'
+import type { PersistedSample, TimelineTrack } from './storage/local'
+import { arrayBufferToBase64, base64ToArrayBuffer, loadAllKitNames, loadBpm, loadMetronomeEnabled, loadPatternByIndex, loadSamples, loadSamplesForSet, loadSwing, loadTimeline, saveBpm, saveKitName, saveMetronomeEnabled, savePatternByIndex, saveSamples, saveSamplesForSet, saveSwing, saveSynthsForSet, saveTimeline } from './storage/local'
 import { GlobalStyles } from './styles/GlobalStyles'
 import { theme } from './styles/theme'
 import { getDrumKitPreset, getDrumKitSampleUrls } from './utils/drumKits'
@@ -41,8 +43,6 @@ function App() {
   const [padNames, setPadNames] = useState<Record<number, string | undefined>>({})
   const [padInstruments, setPadInstruments] = useState<Record<number, InstrumentType>>({})
   const [matrix, setMatrix] = useState<boolean[][]>(() => Array.from({ length: 16 }, () => Array(16).fill(false)))
-  const [synthNotes, setSynthNotes] = useState<Record<number, TB303Note[]>>({})
-  const [synthPatches, setSynthPatches] = useState<Record<number, TB303Patch>>({})
   const [steps, setSteps] = useState<number>(16)
   const [patternIndex, setPatternIndex] = useState<number>(1)
   const [arrangementOn, setArrangementOn] = useState<boolean>(false)
@@ -51,6 +51,7 @@ function App() {
   const [kitIndex, setKitIndex] = useState<number>(1)
   const [kitNames, setKitNames] = useState<string[]>(() => loadAllKitNames())
   const [currentPresetId, setCurrentPresetId] = useState<string | undefined>(undefined)
+  const [isLoadingKit, setIsLoadingKit] = useState<boolean>(false)
   const [selectedPad, setSelectedPad] = useState<number>(0)
   const [controls, setControls] = useState({ warp: false, quantize: true, loop: false, hold: false })
   const [view, setView] = useState<'mpc' | 'timeline' | 'chat'>('mpc')
@@ -61,7 +62,20 @@ function App() {
     { name: 'Synth', clips: [] },
   ])
   const [masterVolume, setMasterVolume] = useState<number>(0.8)
-  const [selectedMeta, setSelectedMeta] = useState<{ 
+  const [drumsBusVolume, setDrumsBusVolume] = useState<number>(0.8)
+  const [drumsMuted, setDrumsMuted] = useState<boolean>(false)
+  const [drumsMeterLevel, setDrumsMeterLevel] = useState<number>(0)
+  const [tb303Volume, setTb303Volume] = useState<number>(0.7)
+  const [tb303Muted, setTb303Muted] = useState<boolean>(false)
+  const [tb303MeterLevel, setTb303MeterLevel] = useState<number>(0)
+  const [tb303Patch, setTb303Patch] = useState<TB303Patch>(defaultTB303Patch)
+  const [tb303Notes, setTb303Notes] = useState<TB303Note[]>([])
+  const [tb303Playing, setTb303Playing] = useState<boolean>(false)
+  const tb303SynthRef = useRef<TB303Synth | null>(null)
+  const drumAnalyserRef = useRef<AnalyserNode | null>(null)
+  const tb303AnalyserRef = useRef<AnalyserNode | null>(null)
+  const meterIntervalRef = useRef<number | null>(null)
+  const [selectedMeta, setSelectedMeta] = useState<{
     duration?: number; 
     sampleRate?: number; 
     channels?: number; 
@@ -78,7 +92,8 @@ function App() {
 
   // Setup audio engine on mount
   useEffect(() => {
-    const e = new AudioEngine()
+    ;(async () => {
+      const e = new AudioEngine()
     e.setBpm(bpm)
     e.setMetronome(metronomeOn)
     const stepCb = ({ stepIndex }: { stepIndex: number }) => {
@@ -101,7 +116,51 @@ function App() {
     e.onBar(onBar)
     engineRef.current = e
 
-    // Restore persisted state: pattern 1 with empty fallback sized to current steps
+      // Initialize TB-303 synth - connect to AudioEngine's master gain
+      const tb303 = new TB303Synth(e['audioContext'], defaultTB303Patch, e['masterGain'])
+      tb303SynthRef.current = tb303
+
+      // Setup audio analysers for metering
+      const audioContext = e['audioContext']
+      const drumAnalyser = audioContext.createAnalyser()
+      drumAnalyser.fftSize = 256
+      drumAnalyserRef.current = drumAnalyser
+
+      const tb303Analyser = audioContext.createAnalyser()
+      tb303Analyser.fftSize = 256
+      tb303AnalyserRef.current = tb303Analyser
+
+      // Start metering loop
+      const meterInterval = window.setInterval(() => {
+        // Drums meter
+        if (drumAnalyserRef.current) {
+          const dataArray = new Uint8Array(drumAnalyserRef.current.frequencyBinCount)
+          drumAnalyserRef.current.getByteTimeDomainData(dataArray)
+          let sum = 0
+          for (let i = 0; i < dataArray.length; i++) {
+            const normalized = (dataArray[i] - 128) / 128
+            sum += normalized * normalized
+          }
+          const rms = Math.sqrt(sum / dataArray.length)
+          setDrumsMeterLevel(Math.min(1, rms * 4))
+        }
+
+        // TB-303 meter
+        if (tb303AnalyserRef.current) {
+          const dataArray = new Uint8Array(tb303AnalyserRef.current.frequencyBinCount)
+          tb303AnalyserRef.current.getByteTimeDomainData(dataArray)
+          let sum = 0
+          for (let i = 0; i < dataArray.length; i++) {
+            const normalized = (dataArray[i] - 128) / 128
+            sum += normalized * normalized
+          }
+          const rms = Math.sqrt(sum / dataArray.length)
+          setTb303MeterLevel(Math.min(1, rms * 4))
+        }
+      }, 50)
+      meterIntervalRef.current = meterInterval
+
+      // Restore persisted state: pattern 1 with empty fallback sized to current steps
     const makeEmpty = (n: number) => Array.from({ length: 16 }, () => Array(n).fill(false))
     const initial = loadPatternByIndex(1, makeEmpty(steps))
     // normalize to current steps length
@@ -123,13 +182,15 @@ function App() {
           setPadNames((prev) => ({ ...prev, [padIndex]: s.name }))
         }
       })()
-    }
+        }
 
-    return () => {
-      e.offStep(stepCb)
-      e.offBar(onBar)
-      e.stop()
-    }
+      return () => {
+        if (meterIntervalRef.current) {
+          clearInterval(meterIntervalRef.current)
+        }
+        e.stop()
+      }
+      })()
     // We intentionally only run on mount to initialize engine; subsequent state updates are handled by other effects
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
@@ -148,6 +209,46 @@ function App() {
     engineRef.current?.setSwing(swing)
     saveSwing(swing)
   }, [swing])
+
+  // Update TB-303 synth when patch changes
+  useEffect(() => {
+    if (tb303SynthRef.current) {
+      tb303SynthRef.current.setPatch(tb303Patch)
+    }
+  }, [tb303Patch])
+
+  // TB-303 playback - schedule notes based on current step
+  useEffect(() => {
+    if (!tb303Playing || !isPlaying || !tb303SynthRef.current || tb303Muted) return
+
+    const notesAtStep = tb303Notes.filter(n => n.startStep === currentStep)
+    if (notesAtStep.length === 0) return
+
+    const now = engineRef.current?.['audioContext'].currentTime ?? 0
+    const secondsPerBeat = 60.0 / bpm
+    const stepDuration = secondsPerBeat / 4 // 16th note
+
+    for (const note of notesAtStep) {
+      const baseDuration = note.duration * stepDuration
+      const noteDuration = baseDuration * tb303Patch.noteLength
+      
+      // Check if previous note has slide flag
+      let slideFrom: number | undefined
+      if (note.slide && currentStep > 0) {
+        const prevNotes = tb303Notes.filter(n => n.startStep < currentStep)
+        if (prevNotes.length > 0) {
+          const lastNote = prevNotes.reduce((a, b) => a.startStep > b.startStep ? a : b)
+          slideFrom = lastNote.note
+        }
+      }
+
+      tb303SynthRef.current.triggerNote(note.note, now, noteDuration, note.accent, slideFrom)
+    }
+  }, [currentStep, tb303Playing, isPlaying, tb303Notes, tb303Muted, bpm, tb303Patch.noteLength])
+
+  const toggleTb303Play = useCallback(() => {
+    setTb303Playing(prev => !prev)
+  }, [])
 
   const togglePlay = useCallback(() => {
     const e = engineRef.current!
@@ -366,7 +467,6 @@ function App() {
     const e = engineRef.current
     if (!e) return
     const samples: PersistedSample[] = []
-    const synths: PersistedSynth[] = []
     
     for (let i = 0; i < 16; i++) {
       const s = e.getSampleForPad(i)
@@ -386,20 +486,9 @@ function App() {
           hold: s.hold ?? false,
         })
       }
-      
-      const synth = e.getSynthForPad(i)
-      if (synth) {
-        synths.push({
-          id: `pad-${i}`,
-          type: synth.type,
-          name: synth.name,
-          patch: synth.patch,
-          notes: synth.notes,
-        })
-      }
     }
     saveSamplesForSet(kitId, samples)
-    saveSynthsForSet(kitId, synths)
+    saveSynthsForSet(kitId, []) // Save empty synths array to clear any old synth data
   }, [])
 
   const loadKit = useCallback((kitId: number) => {
@@ -410,11 +499,8 @@ function App() {
     e.clearAllPads()
     setPadNames({})
     setPadInstruments({})
-    setSynthNotes({})
-    setSynthPatches({})
     
     const sampleList = loadSamplesForSet(kitId)
-    const synthList = loadSynthsForSet(kitId)
     
     // Load samples
     if (sampleList.length > 0) {
@@ -428,20 +514,6 @@ function App() {
           setPadNames((prev) => ({ ...prev, [padIndex]: s.name }))
         }
       })()
-    }
-    
-    // Load synths
-    if (synthList.length > 0) {
-      for (const synth of synthList) {
-        const padIndex = Number(synth.id.replace('pad-', ''))
-        e.assignSynthToPad(padIndex, synth.type)
-        e.updateSynthPatch(padIndex, synth.patch)
-        e.updateSynthNotes(padIndex, synth.notes)
-        setPadNames((prev) => ({ ...prev, [padIndex]: synth.name }))
-        setPadInstruments((prev) => ({ ...prev, [padIndex]: synth.type }))
-        setSynthNotes((prev) => ({ ...prev, [padIndex]: synth.notes }))
-        setSynthPatches((prev) => ({ ...prev, [padIndex]: synth.patch }))
-      }
     }
   }, [])
 
@@ -474,31 +546,10 @@ function App() {
     const e = engineRef.current
     if (!e || selectedPad === undefined) return
 
-    if (type === 'tb303') {
-      e.assignSynthToPad(selectedPad, 'tb303')
-      setPadNames((prev) => ({ ...prev, [selectedPad]: 'TB-303' }))
-      setPadInstruments((prev) => ({ ...prev, [selectedPad]: 'tb303' }))
-      setSynthNotes((prev) => ({ ...prev, [selectedPad]: [] }))
-      setSynthPatches((prev) => ({ ...prev, [selectedPad]: defaultTB303Patch }))
-    } else {
-      // Clear synth and set to sample mode
-      e.clearPad(selectedPad)
-      setPadNames((prev) => {
-        const next = { ...prev }
-        delete next[selectedPad]
-        return next
-      })
+    // For now, only 'sample' type is supported for pads
+    if (type === 'sample') {
+      // Ensure pad is in sample mode
       setPadInstruments((prev) => {
-        const next = { ...prev }
-        delete next[selectedPad]
-        return next
-      })
-      setSynthNotes((prev) => {
-        const next = { ...prev }
-        delete next[selectedPad]
-        return next
-      })
-      setSynthPatches((prev) => {
         const next = { ...prev }
         delete next[selectedPad]
         return next
@@ -506,24 +557,6 @@ function App() {
     }
   }, [selectedPad])
 
-  const onSynthNotesChange = useCallback((notes: TB303Note[]) => {
-    const e = engineRef.current
-    if (!e) return
-    
-    e.updateSynthNotes(selectedPad, notes)
-    setSynthNotes((prev) => ({ ...prev, [selectedPad]: notes }))
-  }, [selectedPad])
-
-  const onSynthPatchChange = useCallback((patch: Partial<TB303Patch>) => {
-    const e = engineRef.current
-    if (!e || selectedPad === undefined) return
-    
-    e.updateSynthPatch(selectedPad, patch)
-    setSynthPatches((prev) => ({ 
-      ...prev, 
-      [selectedPad]: { ...(prev[selectedPad] ?? defaultTB303Patch), ...patch } 
-    }))
-  }, [selectedPad])
 
   // Install key handlers (after callbacks are defined)
   useEffect(() => {
@@ -567,31 +600,37 @@ function App() {
     const preset = getDrumKitPreset(presetId)
     if (!preset) return
     
+    // Set loading state
+    setIsLoadingKit(true)
+    
+    try {
     // Clear all pads from the engine and state
     e.clearAllPads()
     setPadNames({})
     setPadInstruments({})
-    setSynthNotes({})
-    setSynthPatches({})
     
     // Get sample URLs for this preset
-    const sampleUrls = getDrumKitSampleUrls(presetId)
-    
-    // Load samples from URLs
-    const loadedPads = await e.loadSamplesFromUrls(sampleUrls)
-    
-    // Update pad names in state
-    const newPadNames: Record<number, string | undefined> = {}
-    loadedPads.forEach((name, padIndex) => {
-      newPadNames[padIndex] = name
-    })
-    setPadNames(newPadNames)
-    
-    // Update the current kit name to match the preset
-    handleKitNameChange(kitIndex, preset.name)
-    
-    // Track the current preset ID
-    setCurrentPresetId(presetId)
+      const sampleUrls = getDrumKitSampleUrls(presetId)
+      
+      // Load samples from URLs
+      const loadedPads = await e.loadSamplesFromUrls(sampleUrls)
+      
+      // Update pad names in state
+      const newPadNames: Record<number, string | undefined> = {}
+      loadedPads.forEach((name, padIndex) => {
+        newPadNames[padIndex] = name
+      })
+      setPadNames(newPadNames)
+      
+      // Update the current kit name to match the preset
+      handleKitNameChange(kitIndex, preset.name)
+      
+      // Track the current preset ID
+      setCurrentPresetId(presetId)
+    } finally {
+      // Clear loading state
+      setIsLoadingKit(false)
+    }
   }, [kitIndex, handleKitNameChange])
 
   return (
@@ -668,27 +707,37 @@ function App() {
               onChange={onChangeEffectSlot}
             />
           </L.HalfRow>
-          <PadGrid activePad={activePad} activePads={activePads} padNames={padNames} onDropSample={onDropSample} onTriggerPad={onTriggerPad} />
-          {padInstruments[selectedPad] === 'tb303' ? (
-            <PianoRoll
-              notes={synthNotes[selectedPad] ?? []}
-              patch={synthPatches[selectedPad] ?? defaultTB303Patch}
-              steps={steps}
-              currentStep={currentStep}
-              onNotesChange={onSynthNotesChange}
-              onPatchChange={onSynthPatchChange}
-            />
-          ) : (
-            <Sequencer
-              matrix={matrix}
-              currentStep={currentStep}
-              steps={steps}
-              onToggle={onToggleStep}
-              patternNumber={patternIndex}
-              padNames={padNames}
-              onPatternChange={onPatternChange}
-            />
-          )}
+          <PadGrid activePad={activePad} activePads={activePads} padNames={padNames} onDropSample={onDropSample} onTriggerPad={onTriggerPad} isLoading={isLoadingKit} />
+          <Sequencer
+            matrix={matrix}
+            currentStep={currentStep}
+            steps={steps}
+            onToggle={onToggleStep}
+            patternNumber={patternIndex}
+            padNames={padNames}
+            onPatternChange={onPatternChange}
+          />
+          <L.FullRow>
+            <div style={{ display: 'grid', gap: '12px' }}>
+              <TB303Controls
+                padIndex={null}
+                name="TB-303 Synth"
+                patch={tb303Patch}
+                onChange={(changes) => setTb303Patch(prev => ({ ...prev, ...changes }))}
+              />
+              <PianoRoll
+                notes={tb303Notes}
+                patch={tb303Patch}
+                steps={steps}
+                currentStep={currentStep}
+                onNotesChange={setTb303Notes}
+                onPatchChange={(changes) => setTb303Patch(prev => ({ ...prev, ...changes }))}
+                isPlaying={tb303Playing}
+                onTogglePlay={toggleTb303Play}
+                bpm={bpm}
+              />
+            </div>
+          </L.FullRow>
           <L.FullRow>
             <SampleEditor onAssignSlice={onAssignSlice} />
           </L.FullRow>
@@ -728,10 +777,31 @@ function App() {
           )}
         </L.Main>
         <L.RightSidebar>
-          <MasterVolume value={masterVolume} onChange={(v) => {
-            setMasterVolume(v)
-            engineRef.current?.setMasterVolume(v)
-          }} />
+          <MixerChannel
+            label="Drums"
+            value={drumsBusVolume}
+            onChange={setDrumsBusVolume}
+            color="default"
+            muted={drumsMuted}
+            onMuteToggle={() => setDrumsMuted(v => !v)}
+            meterLevel={drumsMeterLevel}
+          />
+          <MixerChannel
+            label="TB-303"
+            value={tb303Volume}
+            onChange={setTb303Volume}
+            color="alt"
+            muted={tb303Muted}
+            onMuteToggle={() => setTb303Muted(v => !v)}
+            meterLevel={tb303MeterLevel}
+          />
+          <MasterVolume 
+            value={masterVolume} 
+            onChange={(v) => {
+              setMasterVolume(v)
+              engineRef.current?.setMasterVolume(v)
+            }} 
+          />
         </L.RightSidebar>
         <L.Footer>© {new Date().getFullYear()} Browser MPC</L.Footer>
       </L.Shell>

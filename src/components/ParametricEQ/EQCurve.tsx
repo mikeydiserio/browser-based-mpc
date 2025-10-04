@@ -1,4 +1,4 @@
-import { useEffect, useRef, useMemo } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
 import type { EQSettings } from '../../audio/eq'
 import { calculateEQCurve, freqToX, gainToY } from '../../audio/eqCurve'
 import * as S from './EQCurve.styles'
@@ -139,7 +139,7 @@ export function EQCurve({
     ctx.stroke()
     
     // Draw band handles
-    handlePositions.forEach((handle, index) => {
+    handlePositions.forEach((handle) => {
       if (!handle.enabled) return
       
       const { x, y, color, gain, frequency } = handle

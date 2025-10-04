@@ -3,7 +3,7 @@ import styled from "styled-components";
 export const Shell = styled.div`
   display: grid;
   grid-template-rows: auto 1fr auto;
-  grid-template-columns: 320px 1fr 120px;
+  grid-template-columns: 320px 1fr 280px;
   grid-template-areas:
     "sidebar header rightsidebar"
     "sidebar main rightsidebar"
@@ -20,6 +20,9 @@ export const Sidebar = styled.aside`
   display: grid;
   grid-auto-rows: max-content;
   gap: 8px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  min-width: 0;
 `;
 
 export const RightSidebar = styled.aside`
@@ -29,8 +32,9 @@ export const RightSidebar = styled.aside`
   padding: ${({ theme }) => theme.spacing(1)};
   box-shadow: ${({ theme }) => theme.shadows.inset};
   display: flex;
-  flex-direction: column;
-  align-items: center;
+  flex-direction: row;
+  align-items: flex-start;
+  justify-content: space-around;
   gap: 8px;
 `;
 

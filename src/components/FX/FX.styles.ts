@@ -84,9 +84,9 @@ export const EffectParams = styled.div`
 `;
 
 export const DelayTimeButtons = styled.div`
-  grid-column: span 2;
+  grid-column: span 3;
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(6, 1fr);
   gap: 3px;
 `;
 
@@ -113,5 +113,33 @@ export const DelayTimeButton = styled.button<{ $active?: boolean }>`
 
   &:active {
     transform: scale(0.98);
+  }
+`;
+
+export const PingPongCheckbox = styled.div`
+  grid-column: span 3;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 6px;
+  background: ${({ theme }) => theme.colors.panel};
+  border: 1px solid ${({ theme }) => theme.colors.gridLine};
+  border-radius: ${({ theme }) => theme.radii.sm};
+
+  input[type="checkbox"] {
+    width: 14px;
+    height: 14px;
+    cursor: pointer;
+    accent-color: ${({ theme }) => theme.colors.accentAlt};
+  }
+
+  label {
+    font-size: 10px;
+    font-weight: 600;
+    color: ${({ theme }) => theme.colors.textPrimary};
+    cursor: pointer;
+    user-select: none;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
   }
 `;

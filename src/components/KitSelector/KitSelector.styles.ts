@@ -8,6 +8,7 @@ export const Container = styled.div`
   border: 1px solid ${({ theme }) => theme.colors.gridLine};
   border-radius: ${({ theme }) => theme.radii.sm};
   gap: 12px;
+  min-width: 0;
 `;
 
 export const Section = styled.div`
@@ -28,6 +29,7 @@ export const KitRow = styled.div`
   display: flex;
   align-items: center;
   gap: 12px;
+  min-width: 0;
 `;
 
 export const KitNameInput = styled.input`
@@ -50,6 +52,7 @@ export const KitNameInput = styled.input`
 export const KitSelector = styled.div`
   display: flex;
   gap: 2px;
+  flex-shrink: 0;
 `;
 
 export const KitButton = styled.button<{ $active: boolean }>`
@@ -122,6 +125,7 @@ export const PresetItem = styled.button<{ $active?: boolean }>`
   cursor: pointer;
   transition: all 0.15s ease;
   text-align: left;
+  min-width: 0;
 
   &:hover {
     background: ${({ theme, $active }) =>
@@ -141,6 +145,7 @@ export const PresetImage = styled.img`
   border-radius: ${({ theme }) => theme.radii.sm};
   background: ${({ theme }) => theme.colors.background};
   border: 1px solid ${({ theme }) => theme.colors.gridLine};
+  flex-shrink: 0;
 `;
 
 export const PresetImagePlaceholder = styled.div`
@@ -154,9 +159,14 @@ export const PresetImagePlaceholder = styled.div`
   justify-content: center;
   font-size: 10px;
   color: ${({ theme }) => theme.colors.textSecondary};
+  flex-shrink: 0;
 `;
 
 export const PresetName = styled.span`
   flex: 1;
   line-height: 1.4;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 `;
