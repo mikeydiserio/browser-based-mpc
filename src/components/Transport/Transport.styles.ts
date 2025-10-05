@@ -4,10 +4,10 @@ export const Container = styled.div`
   display: grid;
   grid-template-columns: auto auto auto auto 1fr auto;
   align-items: center;
-  gap: ${({ theme }) => theme.spacing(1)};
+  gap: ${({ theme }) => theme.spacing(0.5)};
   background: ${({ theme }) => theme.colors.panelRaised};
-  padding: 8px 10px;
-  border-radius: ${({ theme }) => theme.radii.md};
+  padding: 4px 6px;
+  border-radius: ${({ theme }) => theme.radii.sm};
   box-shadow: ${({ theme }) => theme.shadows.soft};
 `;
 
@@ -16,9 +16,12 @@ export const Button = styled.button<{ $primary?: boolean }>`
     $primary ? theme.colors.accent : theme.colors.pad};
   color: ${({ theme }) => theme.colors.textPrimary};
   border: 1px solid ${({ theme }) => theme.colors.gridLine};
-  padding: 6px 10px;
+  padding: 4px 8px;
   border-radius: ${({ theme }) => theme.radii.sm};
   cursor: pointer;
+  font-size: 12px;
+  min-width: auto;
+
   &:active {
     transform: translateY(1px);
   }
@@ -60,14 +63,26 @@ export const Select = styled.select`
   color: ${({ theme }) => theme.colors.textPrimary};
   border: 1px solid ${({ theme }) => theme.colors.gridLine};
   border-radius: ${({ theme }) => theme.radii.sm};
-  padding: 6px 8px;
+  padding: 4px 6px;
+  font-size: 12px;
 `;
 
-export const BPM = styled.div`
+export const BPMInput = styled.input`
+  background: ${({ theme }) => theme.colors.panel};
+  color: ${({ theme }) => theme.colors.textPrimary};
+  border: 1px solid ${({ theme }) => theme.colors.gridLine};
+  border-radius: ${({ theme }) => theme.radii.sm};
+  padding: 4px 8px;
+  font-size: 12px;
   font-variant-numeric: tabular-nums;
   font-family: ${({ theme }) => theme.typography.mono};
-  width: 56px;
-  text-align: right;
+  width: 60px;
+  text-align: center;
+
+  &:focus {
+    outline: none;
+    border-color: ${({ theme }) => theme.colors.accent};
+  }
 `;
 
 export const ToggleGroup = styled.div`

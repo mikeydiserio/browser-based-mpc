@@ -1,6 +1,7 @@
 import styled from "styled-components";
 
 export const Container = styled.div`
+  position: relative;
   background: ${({ theme }) => theme.colors.panel};
   border-radius: ${({ theme }) => theme.radii.md};
   padding: 10px;
@@ -117,4 +118,28 @@ export const BeatLight = styled.div<{ $lit?: boolean; $accent?: boolean }>`
         ? theme.colors.beatLightAccent
         : theme.colors.accentAlt
       : theme.colors.beatLight};
+`;
+
+export const BeatContainer = styled.div`
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+`;
+
+export const SubdivisionNumber = styled.div`
+  font-size: 10px;
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.textSecondary};
+  text-align: center;
+  line-height: 1;
+  margin-top: 2px;
+`;
+
+export const BorderLine = styled.div`
+  width: 1px;
+  height: 12px;
+  background: ${({ theme }) => theme.colors.gridLine};
+  margin: 0 2px;
 `;

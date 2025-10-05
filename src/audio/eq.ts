@@ -6,7 +6,7 @@ export type EQBand = {
   type: BiquadFilterType;
 };
 
-export type EQSettings = [EQBand, EQBand, EQBand, EQBand, EQBand, EQBand];
+export type EQSettings = [EQBand, EQBand, EQBand];
 
 export function createDefaultEQBand(frequency: number): EQBand {
   return {
@@ -20,11 +20,8 @@ export function createDefaultEQBand(frequency: number): EQBand {
 
 export function createDefaultEQSettings(): EQSettings {
   return [
-    createDefaultEQBand(60), // Low
-    createDefaultEQBand(250), // Low-mid
+    createDefaultEQBand(100), // Low
     createDefaultEQBand(1000), // Mid
-    createDefaultEQBand(3000), // High-mid
     createDefaultEQBand(8000), // High
-    createDefaultEQBand(16000), // Air
   ];
 }

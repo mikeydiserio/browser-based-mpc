@@ -9,6 +9,7 @@ type Props = {
   onKitNameChange: (kitIndex: number, name: string) => void;
   onLoadPreset?: (presetId: string) => void;
   currentPresetId?: string;
+  isLoading?: boolean;
 };
 
 export function KitSelector({ 
@@ -17,11 +18,12 @@ export function KitSelector({
   onKitChange, 
   onKitNameChange, 
   onLoadPreset,
-  currentPresetId 
+  currentPresetId,
 }: Props) {
   const [isEditing, setIsEditing] = useState(false);
   const [editValue, setEditValue] = useState('');
   const [imageErrors, setImageErrors] = useState<Record<string, boolean>>({});
+  const [carouselIndex, setCarouselIndex] = useState(0);
 
   const handleNameClick = useCallback(() => {
     setEditValue(kitNames[currentKit - 1] || `Kit ${currentKit}`);
@@ -66,6 +68,17 @@ export function KitSelector({
     setImageErrors(prev => ({ ...prev, [presetId]: true }));
   }, []);
 
+  const handleCarouselPrev = useCallback(() => {
+    setCarouselIndex(prev => (prev === 0 ? DRUM_KIT_PRESETS.length - 1 : prev - 1));
+  }, []);
+
+  const handleCarouselNext = useCallback(() => {
+    setCarouselIndex(prev => (prev === DRUM_KIT_PRESETS.length - 1 ? 0 : prev + 1));
+  }, []);
+
+  // Get current preset based on carousel index
+  const currentPreset = DRUM_KIT_PRESETS[carouselIndex];
+
   return (
     <S.Container>
       <S.Section>
@@ -106,28 +119,44 @@ export function KitSelector({
       {onLoadPreset && (
         <S.Section>
           <S.Label>Drum Machines</S.Label>
-          <S.PresetList>
-            {DRUM_KIT_PRESETS.map((preset) => (
-              <S.PresetItem
-                key={preset.id}
-                onClick={() => handlePresetClick(preset.id)}
-                $active={currentPresetId === preset.id}
-              >
-                {imageErrors[preset.id] ? (
-                  <S.PresetImagePlaceholder>
-                    No Img
-                  </S.PresetImagePlaceholder>
-                ) : (
-                  <S.PresetImage
-                    src={preset.image}
-                    alt={preset.name}
-                    onError={() => handleImageError(preset.id)}
-                  />
+          <S.CarouselContainer>
+            <S.CarouselButton onClick={handleCarouselPrev}>
+              ‹
+            </S.CarouselButton>
+            <S.CarouselContent>
+              <S.PresetActions>
+                <S.PresetItem
+                  key={currentPreset.id}
+                  onClick={() => handlePresetClick(currentPreset.id)}
+                  $active={currentPresetId === currentPreset.id}
+                >
+                  {imageErrors[currentPreset.id] ? (
+                    <S.PresetImagePlaceholder>
+                      No Img
+                    </S.PresetImagePlaceholder>
+                  ) : (
+                    <S.PresetImage
+                      src={currentPreset.image}
+                      alt={currentPreset.name}
+                      onError={() => handleImageError(currentPreset.id)}
+                    />
+                  )}
+                  <S.PresetName>{currentPreset.name}</S.PresetName>
+                </S.PresetItem>
+                {currentPresetId !== currentPreset.id && (
+                  <S.LoadButton onClick={() => handlePresetClick(currentPreset.id)}>
+                    Load Kit
+                  </S.LoadButton>
                 )}
-                <S.PresetName>{preset.name}</S.PresetName>
-              </S.PresetItem>
-            ))}
-          </S.PresetList>
+              </S.PresetActions>
+            </S.CarouselContent>
+            <S.CarouselButton onClick={handleCarouselNext}>
+              ›
+            </S.CarouselButton>
+          </S.CarouselContainer>
+          <S.CarouselIndicator>
+            {carouselIndex + 1} of {DRUM_KIT_PRESETS.length}
+          </S.CarouselIndicator>
         </S.Section>
       )}
     </S.Container>
@@ -135,4 +164,3 @@ export function KitSelector({
 }
 
 export default KitSelector;
-

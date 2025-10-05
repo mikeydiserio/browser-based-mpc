@@ -170,3 +170,79 @@ export const PresetName = styled.span`
   text-overflow: ellipsis;
   white-space: nowrap;
 `;
+
+export const CarouselContainer = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  justify-content: space-between;
+`;
+
+export const CarouselContent = styled.div`
+  position: relative;
+  flex: 1;
+  display: flex;
+  justify-content: center;
+`;
+
+export const CarouselButton = styled.button`
+  width: 32px;
+  height: 32px;
+  background: ${({ theme }) => theme.colors.panelRaised};
+  color: ${({ theme }) => theme.colors.textPrimary};
+  border: 1px solid ${({ theme }) => theme.colors.gridLine};
+  border-radius: ${({ theme }) => theme.radii.sm};
+  font-size: 18px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+
+  &:hover {
+    background: ${({ theme }) => theme.colors.panel};
+    border-color: ${({ theme }) => theme.colors.accent};
+    color: ${({ theme }) => theme.colors.accent};
+  }
+
+  &:active {
+    transform: translateY(1px);
+  }
+`;
+
+export const CarouselIndicator = styled.div`
+  font-size: 10px;
+  color: ${({ theme }) => theme.colors.textSecondary};
+  text-align: center;
+  margin-top: 4px;
+`;
+
+export const PresetActions = styled.div`
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+`;
+
+export const LoadButton = styled.button`
+  height: 28px;
+  padding: 0 12px;
+  background: ${({ theme }) => theme.colors.accent};
+  color: ${({ theme }) => theme.colors.background};
+  border: 1px solid ${({ theme }) => theme.colors.accent};
+  border-radius: ${({ theme }) => theme.radii.sm};
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+
+  &:hover {
+    filter: brightness(1.05);
+  }
+
+  &:active {
+    transform: translateY(1px);
+  }
+`;

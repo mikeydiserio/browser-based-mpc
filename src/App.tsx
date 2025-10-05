@@ -9,8 +9,7 @@ import type { TB303Note, TB303Patch } from './audio/TB303Synth'
 import { defaultTB303Patch, TB303Synth } from './audio/TB303Synth'
 import Chat from './components/Chat/Chat'
 import FX from './components/FX/FX'
-import type { InstrumentType } from './components/InstrumentSelector/InstrumentSelector'
-import InstrumentSelector from './components/InstrumentSelector/InstrumentSelector'
+// Removed InstrumentSelector sidebar element
 import KitSelector from './components/KitSelector/KitSelector'
 import * as L from './components/layout/AppShell.styles'
 import MasterVolume from './components/MasterVolume/MasterVolume'
@@ -31,6 +30,56 @@ import { GlobalStyles } from './styles/GlobalStyles'
 import { theme } from './styles/theme'
 import { getDrumKitPreset, getDrumKitSampleUrls } from './utils/drumKits'
 
+// Panel Header Component
+type PanelHeaderProps = {
+  title: string
+  icon: string
+  currentPad?: number
+  assignedPads?: number[]
+  onPadChange?: (padIndex: number) => void
+  padNames?: Record<number, string | undefined>
+  collapsed?: boolean
+  onToggleCollapse?: () => void
+}
+
+function PanelHeader({ title, icon, currentPad, assignedPads, onPadChange, padNames, collapsed, onToggleCollapse }: PanelHeaderProps) {
+  return (
+    <L.PanelHeader>
+      <L.PanelTitle>
+        <L.PanelIcon>{icon}</L.PanelIcon>
+        <L.PanelName>{title}</L.PanelName>
+      </L.PanelTitle>
+      <L.PanelRight>
+        {currentPad !== undefined && assignedPads && assignedPads.length > 1 && onPadChange && assignedPads.includes(currentPad) && (
+          <L.PadSelector>
+            <L.PadDropdown>
+              <L.PadDropdownButton>
+                {padNames && padNames[currentPad] ? `Pad ${currentPad + 1}: ${padNames[currentPad]}` : `Pad ${currentPad + 1}`}
+                <L.DropdownArrow>▼</L.DropdownArrow>
+              </L.PadDropdownButton>
+              <L.PadDropdownContent>
+                {assignedPads.map(padIndex => (
+                  <L.PadDropdownItem
+                    key={padIndex}
+                    onClick={() => onPadChange(padIndex)}
+                  >
+                    {padNames && padNames[padIndex] ? `Pad ${padIndex + 1}: ${padNames[padIndex]}` : `Pad ${padIndex + 1}`}
+                  </L.PadDropdownItem>
+                ))}
+              </L.PadDropdownContent>
+            </L.PadDropdown>
+          </L.PadSelector>
+        )}
+        {onToggleCollapse && (
+          <L.PanelChevronButton onClick={onToggleCollapse} aria-label={collapsed ? 'Expand panel' : 'Collapse panel'}>
+            {collapsed ? '▸' : '▾'}
+          </L.PanelChevronButton>
+        )}
+      </L.PanelRight>
+    </L.PanelHeader>
+  )
+}
+
 function App() {
   const engineRef = useRef<AudioEngine | null>(null)
   const [isPlaying, setIsPlaying] = useState(false)
@@ -41,7 +90,6 @@ function App() {
   const [activePad, setActivePad] = useState<number | undefined>(undefined)
   const [activePads, setActivePads] = useState<number[]>([])
   const [padNames, setPadNames] = useState<Record<number, string | undefined>>({})
-  const [padInstruments, setPadInstruments] = useState<Record<number, InstrumentType>>({})
   const [matrix, setMatrix] = useState<boolean[][]>(() => Array.from({ length: 16 }, () => Array(16).fill(false)))
   const [steps, setSteps] = useState<number>(16)
   const [patternIndex, setPatternIndex] = useState<number>(1)
@@ -55,7 +103,7 @@ function App() {
   const [selectedPad, setSelectedPad] = useState<number>(0)
   const [controls, setControls] = useState({ warp: false, quantize: true, loop: false, hold: false })
   const [view, setView] = useState<'mpc' | 'timeline' | 'chat'>('mpc')
-  const [showEQCurve, setShowEQCurve] = useState<boolean>(false)
+  // ParametricEQ always shows curve now; no toggle state
   const [tracks, setTracks] = useState<TimelineTrack[]>(() => loadTimeline().length ? loadTimeline() : [
     { name: 'Drums', clips: [] },
     { name: 'Bass', clips: [] },
@@ -71,7 +119,13 @@ function App() {
   const [tb303Patch, setTb303Patch] = useState<TB303Patch>(defaultTB303Patch)
   const [tb303Notes, setTb303Notes] = useState<TB303Note[]>([])
   const [tb303Playing, setTb303Playing] = useState<boolean>(false)
+  const [tb303Fx, setTb303Fx] = useState<EffectsChain>(createDefaultEffectsChain())
   const tb303SynthRef = useRef<TB303Synth | null>(null)
+  const tb303PlayingRef = useRef<boolean>(false)
+  const tb303MutedRef = useRef<boolean>(false)
+  const tb303NotesRef = useRef<TB303Note[]>([])
+  const tb303PatchRef = useRef<TB303Patch>(defaultTB303Patch)
+  const bpmRef = useRef<number>(bpm)
   const drumAnalyserRef = useRef<AnalyserNode | null>(null)
   const tb303AnalyserRef = useRef<AnalyserNode | null>(null)
   const meterIntervalRef = useRef<number | null>(null)
@@ -90,15 +144,60 @@ function App() {
     effectsChain?: EffectsChain;
   }>({})
 
+  // Collapsed state per panel
+  const [collapsed, setCollapsed] = useState<Record<string, boolean>>({
+    'Sample Info': false,
+    'Parametric EQ': false,
+    'Pad Grid': false,
+    'Effects': false,
+    'Sequencer': false,
+    'TB-303 Controls': false,
+    'Piano Roll': false,
+    'Sample Editor': false,
+    'Timeline': false,
+    'Chat': false,
+  })
+
+  // Mixer visibility state
+  const [mixerVisible, setMixerVisible] = useState<boolean>(true)
+
+  const togglePanel = useCallback((key: string) => {
+    setCollapsed(prev => ({ ...prev, [key]: !prev[key] }))
+  }, [])
+
   // Setup audio engine on mount
   useEffect(() => {
     ;(async () => {
       const e = new AudioEngine()
     e.setBpm(bpm)
     e.setMetronome(metronomeOn)
-    const stepCb = ({ stepIndex }: { stepIndex: number }) => {
+    const stepCb = ({ stepIndex, time }: { stepIndex: number; time: number }) => {
       setCurrentStep(stepIndex)
-      // setTotalSteps((prev) => prev + 1)
+      // Schedule TB-303 notes at precise engine time to avoid UI latency
+      const synth = tb303SynthRef.current
+      if (!synth || !tb303PlayingRef.current || tb303MutedRef.current) return
+      const notesAtStep = tb303NotesRef.current.filter(n => n.startStep === stepIndex)
+      if (notesAtStep.length === 0) return
+
+      const secondsPerBeat = 60.0 / bpmRef.current
+      const stepDuration = secondsPerBeat / 4 // 16th note
+
+      for (const note of notesAtStep) {
+        const baseDuration = note.duration * stepDuration
+        const noteDuration = baseDuration * (tb303PatchRef.current.noteLength ?? 1)
+
+        // Check if previous note has slide flag
+        let slideFrom: number | undefined
+        if (note.slide && stepIndex > 0) {
+          const prevNotes = tb303NotesRef.current.filter(n => n.startStep < stepIndex)
+          if (prevNotes.length > 0) {
+            const lastNote = prevNotes.reduce((a, b) => a.startStep > b.startStep ? a : b)
+            slideFrom = lastNote.note
+          }
+        }
+
+        synth.triggerNote(note.note, time, noteDuration, note.accent, slideFrom)
+      }
     }
     e.onStep(stepCb)
     const onBar = (barIdx: number) => {
@@ -119,16 +218,19 @@ function App() {
       // Initialize TB-303 synth - connect to AudioEngine's master gain
       const tb303 = new TB303Synth(e['audioContext'], defaultTB303Patch, e['masterGain'])
       tb303SynthRef.current = tb303
+      tb303.setEffectsChain(tb303Fx)
 
       // Setup audio analysers for metering
       const audioContext = e['audioContext']
       const drumAnalyser = audioContext.createAnalyser()
       drumAnalyser.fftSize = 256
       drumAnalyserRef.current = drumAnalyser
+      e.attachDrumsAnalyser(drumAnalyser)
 
       const tb303Analyser = audioContext.createAnalyser()
       tb303Analyser.fftSize = 256
       tb303AnalyserRef.current = tb303Analyser
+      e.attachTb303Analyser(tb303Analyser)
 
       // Start metering loop
       const meterInterval = window.setInterval(() => {
@@ -143,6 +245,7 @@ function App() {
           }
           const rms = Math.sqrt(sum / dataArray.length)
           setDrumsMeterLevel(Math.min(1, rms * 4))
+          // store waveform for channels if needed later
         }
 
         // TB-303 meter
@@ -210,6 +313,42 @@ function App() {
     saveSwing(swing)
   }, [swing])
 
+  // Keep refs in sync for sample-accurate scheduling in step callback
+  useEffect(() => { tb303PlayingRef.current = tb303Playing }, [tb303Playing])
+  useEffect(() => { tb303MutedRef.current = tb303Muted }, [tb303Muted])
+  useEffect(() => { tb303NotesRef.current = tb303Notes }, [tb303Notes])
+  useEffect(() => { tb303PatchRef.current = tb303Patch }, [tb303Patch])
+  useEffect(() => { tb303SynthRef.current?.setEffectsChain(tb303Fx) }, [tb303Fx])
+  useEffect(() => { bpmRef.current = bpm }, [bpm])
+
+  // Apply drums bus volume changes
+  useEffect(() => {
+    if (engineRef.current) {
+      engineRef.current.setDrumsBusVolume(drumsBusVolume)
+    }
+  }, [drumsBusVolume])
+
+  // Apply drums bus mute changes
+  useEffect(() => {
+    if (engineRef.current) {
+      engineRef.current.setDrumsBusMute(drumsMuted)
+    }
+  }, [drumsMuted])
+
+  // Apply TB-303 bus volume changes
+  useEffect(() => {
+    if (engineRef.current) {
+      engineRef.current.setTb303BusVolume(tb303Volume)
+    }
+  }, [tb303Volume])
+
+  // Apply TB-303 bus mute changes
+  useEffect(() => {
+    if (engineRef.current) {
+      engineRef.current.setTb303BusMute(tb303Muted)
+    }
+  }, [tb303Muted])
+
   // Update TB-303 synth when patch changes
   useEffect(() => {
     if (tb303SynthRef.current) {
@@ -217,34 +356,7 @@ function App() {
     }
   }, [tb303Patch])
 
-  // TB-303 playback - schedule notes based on current step
-  useEffect(() => {
-    if (!tb303Playing || !isPlaying || !tb303SynthRef.current || tb303Muted) return
-
-    const notesAtStep = tb303Notes.filter(n => n.startStep === currentStep)
-    if (notesAtStep.length === 0) return
-
-    const now = engineRef.current?.['audioContext'].currentTime ?? 0
-    const secondsPerBeat = 60.0 / bpm
-    const stepDuration = secondsPerBeat / 4 // 16th note
-
-    for (const note of notesAtStep) {
-      const baseDuration = note.duration * stepDuration
-      const noteDuration = baseDuration * tb303Patch.noteLength
-      
-      // Check if previous note has slide flag
-      let slideFrom: number | undefined
-      if (note.slide && currentStep > 0) {
-        const prevNotes = tb303Notes.filter(n => n.startStep < currentStep)
-        if (prevNotes.length > 0) {
-          const lastNote = prevNotes.reduce((a, b) => a.startStep > b.startStep ? a : b)
-          slideFrom = lastNote.note
-        }
-      }
-
-      tb303SynthRef.current.triggerNote(note.note, now, noteDuration, note.accent, slideFrom)
-    }
-  }, [currentStep, tb303Playing, isPlaying, tb303Notes, tb303Muted, bpm, tb303Patch.noteLength])
+  // Removed old TB-303 playback effect; handled in step callback using engine time
 
   const toggleTb303Play = useCallback(() => {
     setTb303Playing(prev => !prev)
@@ -498,7 +610,6 @@ function App() {
     // Clear all pads from the engine and state
     e.clearAllPads()
     setPadNames({})
-    setPadInstruments({})
     
     const sampleList = loadSamplesForSet(kitId)
     
@@ -542,20 +653,7 @@ function App() {
     setPadNames((prev) => ({ ...prev, [padIndex]: name }))
   }, [])
 
-  const onSelectInstrument = useCallback((type: InstrumentType) => {
-    const e = engineRef.current
-    if (!e || selectedPad === undefined) return
-
-    // For now, only 'sample' type is supported for pads
-    if (type === 'sample') {
-      // Ensure pad is in sample mode
-      setPadInstruments((prev) => {
-        const next = { ...prev }
-        delete next[selectedPad]
-        return next
-      })
-    }
-  }, [selectedPad])
+  // Removed onSelectInstrument/current pad sidebar UI
 
 
   // Install key handlers (after callbacks are defined)
@@ -607,7 +705,6 @@ function App() {
     // Clear all pads from the engine and state
     e.clearAllPads()
     setPadNames({})
-    setPadInstruments({})
     
     // Get sample URLs for this preset
       const sampleUrls = getDrumKitSampleUrls(presetId)
@@ -656,153 +753,268 @@ function App() {
             onKitNameChange={handleKitNameChange}
             onLoadPreset={handleLoadPreset}
             currentPresetId={currentPresetId}
+            isLoading={isLoadingKit}
           />
-          <InstrumentSelector
-            selectedPad={selectedPad}
-            currentInstrument={padInstruments[selectedPad]}
-            onSelectInstrument={onSelectInstrument}
-          />
+          {/* Removed current pad element beneath the kit selector */}
           <PadBrowser padNames={padNames} activePads={activePads} onSelectPad={setSelectedPad} onTriggerPad={onTriggerPad} />
         </L.Sidebar>
         <L.Header>
           <Transport isPlaying={isPlaying} bpm={bpm} metronomeOn={metronomeOn} steps={steps} swing={swing} onTogglePlay={togglePlay} onTempoChange={setBpm} onToggleMetronome={() => setMetronomeOn(v => !v)} onStepsChange={handleStepsChange} onSwingChange={setSwing} arrangementOn={arrangementOn} onToggleArrangement={() => setArrangementOn(v => !v)} />
+          <L.MixerToggleButton onClick={() => setMixerVisible(v => !v)} aria-label={mixerVisible ? 'Hide mixer' : 'Show mixer'}>
+            {mixerVisible ? '◀' : '▶'}
+          </L.MixerToggleButton>
         </L.Header>
         <L.Main>
           {view === 'mpc' && (
             <>
           <L.HalfRow>
             <div style={{ display: 'grid', gap: '12px' }}>
-              <SampleInfo
-                padIndex={selectedPad ?? null}
-                name={padNames[selectedPad]}
-                durationSec={selectedMeta.duration}
-                sampleRate={selectedMeta.sampleRate}
-                channels={selectedMeta.channels}
-                pcmData={selectedMeta.pcm ?? null}
-                pitch={selectedMeta.pitch ?? 0}
-                gain={selectedMeta.gain ?? 1.0}
-                attack={selectedMeta.attack ?? 0.005}
-                decay={selectedMeta.decay ?? 0.05}
-                sustain={selectedMeta.sustain ?? 0.8}
-                release={selectedMeta.release ?? 0.08}
-                eq={showEQCurve ? selectedMeta.eq : undefined}
-                warp={controls.warp}
-                quantize={controls.quantize}
-                loop={controls.loop}
-                hold={controls.hold}
-                onChange={onChangeSampleInfo}
-                onControlsChange={onChangeControls}
-              />
-              <ParametricEQ
-                eqBands={selectedMeta.eq ?? createDefaultEQSettings()}
-                onChange={onChangeEQBand}
-                showCurve={showEQCurve}
-                onShowCurveChange={setShowEQCurve}
-              />
+              <div>
+                <PanelHeader
+                  title="Sample Info"
+                  icon="♪"
+                  currentPad={selectedPad}
+                  assignedPads={Object.keys(padNames).filter(key => padNames[Number(key)]).map(Number)}
+                  onPadChange={setSelectedPad}
+                  padNames={padNames}
+                  collapsed={collapsed['Sample Info']}
+                  onToggleCollapse={() => togglePanel('Sample Info')}
+                />
+                {!collapsed['Sample Info'] && (
+                <SampleInfo
+                  padIndex={selectedPad ?? null}
+                  name={padNames[selectedPad]}
+                  durationSec={selectedMeta.duration}
+                  sampleRate={selectedMeta.sampleRate}
+                  channels={selectedMeta.channels}
+                  pcmData={selectedMeta.pcm ?? null}
+                  pitch={selectedMeta.pitch ?? 0}
+                  gain={selectedMeta.gain ?? 1.0}
+                  attack={selectedMeta.attack ?? 0.005}
+                  decay={selectedMeta.decay ?? 0.05}
+                  sustain={selectedMeta.sustain ?? 0.8}
+                  release={selectedMeta.release ?? 0.08}
+                  warp={controls.warp}
+                  quantize={controls.quantize}
+                  loop={controls.loop}
+                  hold={controls.hold}
+                  onChange={onChangeSampleInfo}
+                  onControlsChange={onChangeControls}
+                />)}
+              </div>
+              <div>
+                <PanelHeader
+                  title="Parametric EQ"
+                  icon="≡"
+                  currentPad={selectedPad}
+                  assignedPads={Object.keys(padNames).filter(key => padNames[Number(key)]).map(Number)}
+                  onPadChange={setSelectedPad}
+                  padNames={padNames}
+                  collapsed={collapsed['Parametric EQ']}
+                  onToggleCollapse={() => togglePanel('Parametric EQ')}
+                />
+                {!collapsed['Parametric EQ'] && (
+                <ParametricEQ
+                  eqBands={selectedMeta.eq ?? createDefaultEQSettings()}
+                  onChange={onChangeEQBand}
+                />)}
+              </div>
             </div>
           </L.HalfRow>
           <L.HalfRow>
-            <FX
-              effectSlots={selectedMeta.effectsChain ?? createDefaultEffectsChain()}
-              onChange={onChangeEffectSlot}
-            />
+            <div>
+              <PanelHeader
+                title="Pad Grid"
+                icon="⊞"
+                collapsed={collapsed['Pad Grid']}
+                onToggleCollapse={() => togglePanel('Pad Grid')}
+              />
+              {!collapsed['Pad Grid'] && (
+              <PadGrid activePad={activePad} activePads={activePads} padNames={padNames} onDropSample={onDropSample} onTriggerPad={onTriggerPad} />
+              )}
+            </div>
           </L.HalfRow>
-          <PadGrid activePad={activePad} activePads={activePads} padNames={padNames} onDropSample={onDropSample} onTriggerPad={onTriggerPad} isLoading={isLoadingKit} />
-          <Sequencer
-            matrix={matrix}
-            currentStep={currentStep}
-            steps={steps}
-            onToggle={onToggleStep}
-            patternNumber={patternIndex}
-            padNames={padNames}
-            onPatternChange={onPatternChange}
-          />
+          <L.HalfRow>
+            <div>
+              <PanelHeader
+                title="Effects"
+                icon="✨"
+                currentPad={selectedPad}
+                assignedPads={Object.keys(padNames).filter(key => padNames[Number(key)]).map(Number)}
+                onPadChange={setSelectedPad}
+                collapsed={collapsed['Effects']}
+                onToggleCollapse={() => togglePanel('Effects')}
+              />
+              {!collapsed['Effects'] && (
+              <FX
+                effectSlots={selectedMeta.effectsChain ?? createDefaultEffectsChain()}
+                onChange={onChangeEffectSlot}
+              />)}
+            </div>
+          </L.HalfRow>
+          <div>
+            <PanelHeader
+              title="Sequencer"
+              icon="⬡"
+              collapsed={collapsed['Sequencer']}
+              onToggleCollapse={() => togglePanel('Sequencer')}
+            />
+            {!collapsed['Sequencer'] && (
+            <Sequencer
+              matrix={matrix}
+              currentStep={currentStep}
+              steps={steps}
+              onToggle={onToggleStep}
+              patternNumber={patternIndex}
+              padNames={padNames}
+              onPatternChange={onPatternChange}
+              isLoading={isLoadingKit}
+            />)}
+          </div>
           <L.FullRow>
             <div style={{ display: 'grid', gap: '12px' }}>
-              <TB303Controls
-                padIndex={null}
-                name="TB-303 Synth"
-                patch={tb303Patch}
-                onChange={(changes) => setTb303Patch(prev => ({ ...prev, ...changes }))}
-              />
-              <PianoRoll
-                notes={tb303Notes}
-                patch={tb303Patch}
-                steps={steps}
-                currentStep={currentStep}
-                onNotesChange={setTb303Notes}
-                onPatchChange={(changes) => setTb303Patch(prev => ({ ...prev, ...changes }))}
-                isPlaying={tb303Playing}
-                onTogglePlay={toggleTb303Play}
-                bpm={bpm}
-              />
+              <div>
+                <PanelHeader
+                  title="TB-303 Controls"
+                  icon="🎛️"
+                  collapsed={collapsed['TB-303 Controls']}
+                  onToggleCollapse={() => togglePanel('TB-303 Controls')}
+                />
+                {!collapsed['TB-303 Controls'] && (
+                <TB303Controls
+                  padIndex={null}
+                  name="TB-303 Synth"
+                  patch={tb303Patch}
+                  onChange={(changes) => setTb303Patch(prev => ({ ...prev, ...changes }))}
+                  analyser={tb303SynthRef.current?.analyser}
+                />)}
+                <FX
+                  effectSlots={tb303Fx}
+                  onChange={(slotIndex, effect) => {
+                    setTb303Fx(prev => {
+                      const next = [...prev] as EffectsChain
+                      next[slotIndex] = effect
+                      return next as EffectsChain
+                    })
+                  }}
+                />
+              </div>
+              <div>
+                <PanelHeader
+                  title="Piano Roll"
+                  icon="🎹"
+                  collapsed={collapsed['Piano Roll']}
+                  onToggleCollapse={() => togglePanel('Piano Roll')}
+                />
+                {!collapsed['Piano Roll'] && (
+                <PianoRoll
+                  notes={tb303Notes}
+                  patch={tb303Patch}
+                  steps={steps}
+                  currentStep={currentStep}
+                  onNotesChange={setTb303Notes}
+                  onPatchChange={(changes) => setTb303Patch(prev => ({ ...prev, ...changes }))}
+                  isPlaying={tb303Playing}
+                  onTogglePlay={toggleTb303Play}
+                  bpm={bpm}
+                />)}
+              </div>
             </div>
           </L.FullRow>
           <L.FullRow>
-            <SampleEditor onAssignSlice={onAssignSlice} />
+            <div>
+              <PanelHeader
+                title="Sample Editor"
+                icon="✂️"
+                collapsed={collapsed['Sample Editor']}
+                onToggleCollapse={() => togglePanel('Sample Editor')}
+              />
+              {!collapsed['Sample Editor'] && (
+              <SampleEditor onAssignSlice={onAssignSlice} />
+              )}
+            </div>
           </L.FullRow>
             </>
           )}
           {view === 'timeline' && (
             <L.FullRow>
-              <Timeline
-                tracks={tracks}
-                isPlaying={isPlaying && arrangementOn}
-                currentBar={timelineBar}
-                onTogglePlay={toggleTimelinePlay}
-                onAddClip={(trackIndex, startBar, lengthBars, label) => {
-                  setTracks(prev => {
-                    const next = prev.map(t => ({ ...t, clips: t.clips.slice() }))
-                    next[trackIndex].clips.push({ startBar, lengthBars, label, patternIndex })
-                    saveTimeline(next)
-                    return next
-                  })
-                }}
-                onUpdateClips={(trackIndex, clips) => {
-                  setTracks(prev => {
-                    const next: TimelineTrack[] = prev.map(t => ({ ...t, clips: t.clips.map(c => ({ ...c })) }))
-                    // Ensure patternIndex is a number (default to 0 meaning none)
-                    next[trackIndex].clips = clips.map(c => ({ ...c, patternIndex: c.patternIndex ?? 0 }))
-                    saveTimeline(next)
-                    return next
-                  })
-                }}
-              />
+              <div>
+                <PanelHeader
+                  title="Timeline"
+                  icon="⏱️"
+                  collapsed={collapsed['Timeline']}
+                  onToggleCollapse={() => togglePanel('Timeline')}
+                />
+                {!collapsed['Timeline'] && (
+                <Timeline
+                  tracks={tracks}
+                  isPlaying={isPlaying && arrangementOn}
+                  currentBar={timelineBar}
+                  onTogglePlay={toggleTimelinePlay}
+                  onAddClip={(trackIndex, startBar, lengthBars, label) => {
+                    setTracks(prev => {
+                      const next = prev.map(t => ({ ...t, clips: t.clips.slice() }))
+                      next[trackIndex].clips.push({ startBar, lengthBars, label, patternIndex })
+                      saveTimeline(next)
+                      return next
+                    })
+                  }}
+                  onUpdateClips={(trackIndex, clips) => {
+                    setTracks(prev => {
+                      const next: TimelineTrack[] = prev.map(t => ({ ...t, clips: t.clips.map(c => ({ ...c })) }))
+                      // Ensure patternIndex is a number (default to 0 meaning none)
+                      next[trackIndex].clips = clips.map(c => ({ ...c, patternIndex: c.patternIndex ?? 0 }))
+                      saveTimeline(next)
+                      return next
+                    })
+                  }}
+                />)}
+              </div>
             </L.FullRow>
           )}
           {view === 'chat' && (
             <L.FullRow>
-              <Chat />
+              <div>
+                <PanelHeader
+                  title="Chat"
+                  icon="💬"
+                  collapsed={collapsed['Chat']}
+                  onToggleCollapse={() => togglePanel('Chat')}
+                />
+                {!collapsed['Chat'] && (<Chat />)}
+              </div>
             </L.FullRow>
           )}
         </L.Main>
-        <L.RightSidebar>
-          <MixerChannel
-            label="Drums"
-            value={drumsBusVolume}
-            onChange={setDrumsBusVolume}
-            color="default"
-            muted={drumsMuted}
-            onMuteToggle={() => setDrumsMuted(v => !v)}
-            meterLevel={drumsMeterLevel}
-          />
-          <MixerChannel
-            label="TB-303"
-            value={tb303Volume}
-            onChange={setTb303Volume}
-            color="alt"
-            muted={tb303Muted}
-            onMuteToggle={() => setTb303Muted(v => !v)}
-            meterLevel={tb303MeterLevel}
-          />
-          <MasterVolume 
-            value={masterVolume} 
-            onChange={(v) => {
-              setMasterVolume(v)
-              engineRef.current?.setMasterVolume(v)
-            }} 
-          />
-        </L.RightSidebar>
+        {mixerVisible && (
+          <L.RightSidebar>
+            <MixerChannel
+              label="Drums"
+              value={drumsBusVolume}
+              onChange={setDrumsBusVolume}
+              color="default"
+              muted={drumsMuted}
+              onMuteToggle={() => setDrumsMuted(v => !v)}
+              meterLevel={drumsMeterLevel}
+            />
+            <MixerChannel
+              label="TB-303"
+              value={tb303Volume}
+              onChange={setTb303Volume}
+              color="alt"
+              muted={tb303Muted}
+              onMuteToggle={() => setTb303Muted(v => !v)}
+              meterLevel={tb303MeterLevel}
+            />
+            <MasterVolume
+              value={masterVolume}
+              onChange={(v) => {
+                setMasterVolume(v)
+                engineRef.current?.setMasterVolume(v)
+              }}
+            />
+          </L.RightSidebar>
+        )}
         <L.Footer>© {new Date().getFullYear()} Browser MPC</L.Footer>
       </L.Shell>
     </ThemeProvider>

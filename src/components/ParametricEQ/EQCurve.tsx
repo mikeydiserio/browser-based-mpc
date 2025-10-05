@@ -12,12 +12,9 @@ type Props = {
 }
 
 const BAND_COLORS = [
-  '#ff4757', // Red - Low
-  '#ffa502', // Orange - Low-Mid  
-  '#fffa65', // Yellow - Mid
-  '#7bed9f', // Green - High-Mid
-  '#70a1ff', // Blue - High
-  '#a4b0be', // Gray - Air
+  '#ff4757', // Low
+  '#70a1ff', // Mid
+  '#7bed9f', // High
 ]
 
 export function EQCurve({ 
@@ -196,7 +193,7 @@ export function EQCurve({
           <S.LegendItem key={index} $enabled={band.enabled}>
             <S.ColorDot $color={BAND_COLORS[index]} />
             <S.BandName>
-              {['Low', 'Low-Mid', 'Mid', 'High-Mid', 'High', 'Air'][index]}
+              {['Low', 'Mid', 'High'][index]}
             </S.BandName>
             <S.BandInfo>
               {band.frequency >= 1000 ? `${(band.frequency/1000).toFixed(1)}k` : `${band.frequency}`}Hz

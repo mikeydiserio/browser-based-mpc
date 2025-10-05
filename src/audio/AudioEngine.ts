@@ -44,6 +44,7 @@ export type LoadedSynth = {
 export type StepEvent = {
   stepIndex: number;
   isAccent: boolean;
+  time: number; // precise AudioContext time this step is scheduled to occur
 };
 
 export class AudioEngine {
@@ -59,6 +60,8 @@ export class AudioEngine {
   private metronomeOn = true;
   private metronomeGain: GainNode | null = null;
   private masterGain: GainNode;
+  private drumsBusGain: GainNode;
+  private tb303BusGain: GainNode;
   private swingAmount = 0; // 0..1 fraction of half-step delay on off-steps
 
   private stepCallbacks = new Set<(e: StepEvent) => void>();
@@ -87,6 +90,16 @@ export class AudioEngine {
     this.masterGain.gain.value = 0.8; // Default to 80% volume
     this.masterGain.connect(this.audioContext.destination);
 
+    // Create simple buses for routing and metering
+    this.drumsBusGain = this.audioContext.createGain();
+    this.drumsBusGain.gain.value = 0.8;
+    this.tb303BusGain = this.audioContext.createGain();
+    this.tb303BusGain.gain.value = 0.8;
+
+    // Route buses to master
+    this.drumsBusGain.connect(this.masterGain);
+    this.tb303BusGain.connect(this.masterGain);
+
     this.metronomeGain = this.audioContext.createGain();
     this.metronomeGain.gain.value = 0.0;
     this.metronomeGain.connect(this.masterGain);
@@ -104,6 +117,61 @@ export class AudioEngine {
     // Clamp between 0 and 1
     const normalizedVolume = Math.max(0, Math.min(1, volume));
     this.masterGain.gain.value = normalizedVolume;
+  }
+
+  private drumsBusMuted = false;
+  private tb303BusMuted = false;
+  private drumsBusStoredVolume = 0.8;
+  private tb303BusStoredVolume = 0.8;
+
+  setDrumsBusVolume(volume: number) {
+    const normalizedVolume = Math.max(0, Math.min(1, volume));
+    this.drumsBusStoredVolume = normalizedVolume;
+    if (!this.drumsBusMuted) {
+      this.drumsBusGain.gain.value = normalizedVolume;
+    }
+  }
+
+  setTb303BusVolume(volume: number) {
+    const normalizedVolume = Math.max(0, Math.min(1, volume));
+    this.tb303BusStoredVolume = normalizedVolume;
+    if (!this.tb303BusMuted) {
+      this.tb303BusGain.gain.value = normalizedVolume;
+    }
+  }
+
+  setDrumsBusMute(muted: boolean) {
+    this.drumsBusMuted = muted;
+    this.drumsBusGain.gain.value = muted ? 0 : this.drumsBusStoredVolume;
+  }
+
+  setTb303BusMute(muted: boolean) {
+    this.tb303BusMuted = muted;
+    this.tb303BusGain.gain.value = muted ? 0 : this.tb303BusStoredVolume;
+  }
+
+  getDrumsBusMute() {
+    return this.drumsBusMuted;
+  }
+
+  getTb303BusMute() {
+    return this.tb303BusMuted;
+  }
+
+  attachDrumsAnalyser(node: AnalyserNode) {
+    try {
+      this.drumsBusGain.connect(node);
+    } catch {
+      /* ignore duplicate connect */
+    }
+  }
+
+  attachTb303Analyser(node: AnalyserNode) {
+    try {
+      this.tb303BusGain.connect(node);
+    } catch {
+      /* ignore duplicate connect */
+    }
   }
 
   getMasterVolume() {
@@ -165,7 +233,7 @@ export class AudioEngine {
 
   private scheduleStep(stepIndex: number, time: number) {
     const isAccent = stepIndex % 4 === 0;
-    this.stepCallbacks.forEach((cb) => cb({ stepIndex, isAccent }));
+    this.stepCallbacks.forEach((cb) => cb({ stepIndex, isAccent, time }));
 
     if (stepIndex === 0) {
       this.barCount += 1;
@@ -520,7 +588,8 @@ export class AudioEngine {
       outputNode = this.applyEffect(effect, outputNode);
     }
 
-    outputNode.connect(this.masterGain);
+    // Route drums to drums bus for metering and bus control
+    outputNode.connect(this.drumsBusGain);
 
     if (sample.loop) {
       source.loop = true;
@@ -759,7 +828,7 @@ export class AudioEngine {
     band: import("./eq").EQBand
   ) {
     const s = this.padMap.get(`pad-${padIndex}`);
-    if (!s || bandIndex < 0 || bandIndex > 5) return;
+    if (!s || bandIndex < 0 || bandIndex > 2) return;
     // Create new array to trigger React re-render
     const newEQ = [...s.eq] as EQSettings;
     newEQ[bandIndex] = band;

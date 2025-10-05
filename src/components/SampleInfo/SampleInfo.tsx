@@ -1,6 +1,4 @@
 import { useEffect, useMemo, useRef } from 'react'
-import type { EQSettings } from '../../audio/eq'
-import { calculateEQCurve, freqToX, gainToY } from '../../audio/eqCurve'
 import { Knob } from '../Knob/Knob'
 import * as S from './SampleInfo.styles'
 
@@ -17,7 +15,6 @@ type Props = {
   decay?: number
   sustain?: number
   release?: number
-  eq?: EQSettings
   warp?: boolean
   quantize?: boolean
   loop?: boolean
@@ -26,7 +23,7 @@ type Props = {
   onControlsChange?: (changes: Partial<{ warp: boolean; quantize: boolean; loop: boolean; hold: boolean }>) => void
 }
 
-export function SampleInfo({ padIndex, name, durationSec, sampleRate, channels, pcmData, pitch = 0, gain = 1.0, attack = 0.005, decay = 0.05, sustain = 0.8, release = 0.08, eq, warp = false, quantize = true, loop = false, hold = false, onChange, onControlsChange }: Props) {
+export function SampleInfo({ padIndex, name, durationSec, sampleRate, channels, pcmData, pitch = 0, attack = 0.005, decay = 0.05, sustain = 0.8, release = 0.08, onChange }: Props) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
 
   const downsampled = useMemo(() => {
@@ -56,7 +53,6 @@ export function SampleInfo({ padIndex, name, durationSec, sampleRate, channels, 
     const h = canvas.height = canvas.clientHeight
     ctx.clearRect(0, 0, w, h)
     ctx.fillStyle = '#00000000'
-    
     // Waveform
     ctx.strokeStyle = '#21c7be'
     ctx.lineWidth = 1
@@ -69,50 +65,6 @@ export function SampleInfo({ padIndex, name, durationSec, sampleRate, channels, 
       ctx.lineTo((x / downsampled.length) * w, mid + y)
     }
     ctx.stroke()
-    
-    // EQ Curve overlay
-    if (eq) {
-      const { frequencies, gains } = calculateEQCurve(eq, 150, sampleRate ?? 44100)
-      
-      // Draw frequency response curve
-      ctx.strokeStyle = '#ffd23f'
-      ctx.lineWidth = 2
-      ctx.beginPath()
-      for (let i = 0; i < frequencies.length; i++) {
-        const x = freqToX(frequencies[i], w)
-        const y = gainToY(gains[i], h, 12)
-        if (i === 0) {
-          ctx.moveTo(x, y)
-        } else {
-          ctx.lineTo(x, y)
-        }
-      }
-      ctx.stroke()
-      
-      // Draw center line (0dB reference)
-      ctx.strokeStyle = 'rgba(255, 255, 255, 0.15)'
-      ctx.lineWidth = 1
-      ctx.setLineDash([4, 4])
-      ctx.beginPath()
-      ctx.moveTo(0, h / 2)
-      ctx.lineTo(w, h / 2)
-      ctx.stroke()
-      ctx.setLineDash([])
-      
-      // Fill under/over EQ curve
-      ctx.fillStyle = 'rgba(255, 210, 63, 0.15)'
-      ctx.beginPath()
-      ctx.moveTo(freqToX(frequencies[0], w), h / 2)
-      for (let i = 0; i < frequencies.length; i++) {
-        const x = freqToX(frequencies[i], w)
-        const y = gainToY(gains[i], h, 12)
-        ctx.lineTo(x, y)
-      }
-      ctx.lineTo(freqToX(frequencies[frequencies.length - 1], w), h / 2)
-      ctx.closePath()
-      ctx.fill()
-    }
-    
     // ADSR overlay
     const dur = durationSec ?? 1
     const aX = (attack / dur) * w
@@ -125,8 +77,7 @@ export function SampleInfo({ padIndex, name, durationSec, sampleRate, channels, 
     const decayEndX = Math.min(peakX + dX, w)
     const releaseStartX = Math.max(w - rX, decayEndX)
     ctx.strokeStyle = '#ff7a45'
-    ctx.lineWidth = 2
-    ctx.setLineDash([2, 2])
+    ctx.lineWidth = 3
     ctx.beginPath()
     // Attack
     ctx.moveTo(startX, h - 2)
@@ -138,8 +89,7 @@ export function SampleInfo({ padIndex, name, durationSec, sampleRate, channels, 
     // Release
     ctx.lineTo(w, h - 2)
     ctx.stroke()
-    ctx.setLineDash([])
-  }, [downsampled, attack, decay, sustain, release, durationSec, eq, sampleRate])
+  }, [downsampled, attack, decay, sustain, release, durationSec])
 
   return (
     <S.Container>
@@ -147,32 +97,6 @@ export function SampleInfo({ padIndex, name, durationSec, sampleRate, channels, 
         <div>Selected Pad: {padIndex !== null ? padIndex + 1 : '-'}</div>
       </S.TitleRow>
       <S.Name>{name ?? 'No sample loaded'}</S.Name>
-      <S.ToggleRow>
-        <S.ToggleButton
-          $active={warp}
-          onClick={() => onControlsChange?.({ warp: !warp })}
-        >
-          Warp
-        </S.ToggleButton>
-        <S.ToggleButton
-          $active={quantize}
-          onClick={() => onControlsChange?.({ quantize: !quantize })}
-        >
-          Quantize
-        </S.ToggleButton>
-        <S.ToggleButton
-          $active={loop}
-          onClick={() => onControlsChange?.({ loop: !loop })}
-        >
-          Loop
-        </S.ToggleButton>
-        <S.ToggleButton
-          $active={hold}
-          onClick={() => onControlsChange?.({ hold: !hold })}
-        >
-          Hold
-        </S.ToggleButton>
-      </S.ToggleRow>
       <S.WaveCanvas ref={canvasRef} />
       <S.MetaGrid>
         <S.MetaItem>Length: <span>{durationSec ? `${durationSec.toFixed(2)}s` : '-'}</span></S.MetaItem>
@@ -180,17 +104,16 @@ export function SampleInfo({ padIndex, name, durationSec, sampleRate, channels, 
         <S.MetaItem>Channels: <span>{channels ?? '-'}</span></S.MetaItem>
       </S.MetaGrid>
       <S.KnobRow>
-        <Knob label="Gain" min={0} max={2} step={0.01} value={gain} onChange={(v) => onChange?.({ gain: v })} format={(v) => `${(v * 100).toFixed(0)}%`} />
-        <Knob label="Pitch" min={-24} max={24} step={1} value={pitch} onChange={(v) => onChange?.({ pitch: v })} format={(v) => `${v} st`} />
-      </S.KnobRow>
-      <S.ADSRRow>
+        <Knob label="Pitch" min={-12} max={12} step={1} value={pitch} onChange={(v) => onChange?.({ pitch: v })} format={(v) => `${v} st`} />
         <Knob label="Attack" min={0} max={1} step={0.005} value={attack} onChange={(v) => onChange?.({ attack: v })} format={(v) => `${v.toFixed(3)}s`} />
         <Knob label="Decay" min={0} max={2} step={0.01} value={decay} onChange={(v) => onChange?.({ decay: v })} format={(v) => `${v.toFixed(2)}s`} />
         <Knob label="Sustain" min={0} max={1} step={0.01} value={sustain} onChange={(v) => onChange?.({ sustain: v })} format={(v) => v.toFixed(2)} />
         <Knob label="Release" min={0} max={2} step={0.01} value={release} onChange={(v) => onChange?.({ release: v })} format={(v) => `${v.toFixed(2)}s`} />
-      </S.ADSRRow>
+      </S.KnobRow>
     </S.Container>
   )
 }
 
 export default SampleInfo
+
+

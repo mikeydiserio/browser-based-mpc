@@ -5,15 +5,13 @@ import { EQCurve } from "./EQCurve";
 import * as S from "./ParametricEQ.styles";
 
 type Props = {
-  eqBands: [EQBand, EQBand, EQBand, EQBand, EQBand, EQBand];
+  eqBands: [EQBand, EQBand, EQBand];
   onChange?: (bandIndex: number, band: EQBand) => void;
-  showCurve?: boolean;
-  onShowCurveChange?: (show: boolean) => void;
 };
 
-const bandNames = ["Low", "Low-Mid", "Mid", "High-Mid", "High", "Air"];
+const bandNames = ["Low", "Mid", "High"];
 
-export function ParametricEQ({ eqBands, onChange, showCurve = false, onShowCurveChange }: Props) {
+export function ParametricEQ({ eqBands, onChange }: Props) {
   const eqBandsRef = useRef(eqBands);
   const onChangeRef = useRef(onChange);
   
@@ -39,16 +37,7 @@ export function ParametricEQ({ eqBands, onChange, showCurve = false, onShowCurve
   return (
     <S.Container>
       <S.Header>
-        <S.Title>Parametric EQ (6 Bands)</S.Title>
-        <S.ShowCurveToggle>
-          <input
-            type="checkbox"
-            id="show-eq-curve"
-            checked={showCurve}
-            onChange={(e) => onShowCurveChange?.(e.target.checked)}
-          />
-          <label htmlFor="show-eq-curve">Show EQ Curve</label>
-        </S.ShowCurveToggle>
+        <S.Title>Parametric EQ (3 Bands)</S.Title>
       </S.Header>
       <S.BandsGrid>
         {eqBands.map((band, index) => (
@@ -99,13 +88,11 @@ export function ParametricEQ({ eqBands, onChange, showCurve = false, onShowCurve
           </S.Band>
         ))}
       </S.BandsGrid>
-      {showCurve && (
-        <EQCurve 
-          eqBands={eqBands}
-          width={380}
-          height={160}
-        />
-      )}
+      <EQCurve 
+        eqBands={eqBands}
+        width={380}
+        height={160}
+      />
     </S.Container>
   );
 }

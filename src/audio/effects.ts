@@ -7,7 +7,8 @@ export type EffectType =
   | "phaser"
   | "chorus"
   | "compressor"
-  | "limiter";
+  | "limiter"
+  | "arpeggiator";
 
 export type DelayTime =
   | "quarter"
@@ -16,6 +17,16 @@ export type DelayTime =
   | "16th"
   | "32nd"
   | "triplet";
+
+export type ArpeggiatorPattern =
+  | "up"
+  | "down"
+  | "up-down"
+  | "down-up"
+  | "random"
+  | "order";
+
+export type ArpeggiatorRate = "1/1" | "1/2" | "1/4" | "1/8" | "1/16" | "1/32";
 
 export type EffectSlot = {
   type: EffectType;
@@ -52,6 +63,11 @@ export type EffectSlot = {
   limiterThreshold?: number;
   limiterRelease?: number;
   limiterLookahead?: number;
+  // Arpeggiator parameters
+  arpeggiatorRate?: ArpeggiatorRate;
+  arpeggiatorPattern?: ArpeggiatorPattern;
+  arpeggiatorGate?: number;
+  arpeggiatorOctaveRange?: number;
 };
 
 export type EffectsChain = [
@@ -142,6 +158,14 @@ export function getDefaultParamsForEffect(
         limiterThreshold: -3,
         limiterRelease: 0.01,
         limiterLookahead: 0.005,
+      };
+    case "arpeggiator":
+      return {
+        dryWet: 1.0,
+        arpeggiatorRate: "1/16",
+        arpeggiatorPattern: "up",
+        arpeggiatorGate: 0.8,
+        arpeggiatorOctaveRange: 1,
       };
     default:
       return { dryWet: 0.5 };

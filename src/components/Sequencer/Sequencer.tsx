@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, type ChangeEvent } from 'react'
+import LoadingSpinner from '../LoadingSpinner/LoadingSpinner'
 import * as S from './Sequencer.styles'
 
 type SequencerProps = {
@@ -9,9 +10,10 @@ type SequencerProps = {
   patternNumber?: number
   onPatternChange?: (pattern: number) => void
   padNames?: Record<number, string | undefined>
+  isLoading?: boolean
 }
 
-export function Sequencer({ matrix, currentStep, steps, onToggle, patternNumber = 1, onPatternChange, padNames = {} }: SequencerProps) {
+export function Sequencer({ matrix, currentStep, steps, onToggle, patternNumber = 1, onPatternChange, padNames = {}, isLoading }: SequencerProps) {
   // Filter rows to only show pads that have samples assigned
   const rows = useMemo(() => {
     return Array.from({ length: 16 }, (_, i) => i).filter(i => padNames[i] !== undefined)
@@ -39,7 +41,18 @@ export function Sequencer({ matrix, currentStep, steps, onToggle, patternNumber 
         <S.HeaderBeats>
           {cols.map((c) => {
             const accent = (c % 4) === 0
-            return <S.BeatLight key={`h-${c}`} $lit={litIndex === c} $accent={accent} />
+            const subdivisionNumber = Math.floor(c / 4) + 1
+            return (
+              <S.BeatContainer key={`h-${c}`}>
+                <S.BeatLight $lit={litIndex === c} $accent={accent} />
+                {accent && (
+                  <>
+                    <S.SubdivisionNumber>{subdivisionNumber}</S.SubdivisionNumber>
+                    <S.BorderLine />
+                  </>
+                )}
+              </S.BeatContainer>
+            )
           })}
         </S.HeaderBeats>
       </S.Header>
@@ -74,7 +87,7 @@ export function Sequencer({ matrix, currentStep, steps, onToggle, patternNumber 
             min={1}
             max={99}
             value={localPatternStr}
-            onChange={(e) => {
+            onChange={(e: ChangeEvent<HTMLInputElement>) => {
               const val = e.target.value
               setLocalPatternStr(val)
               const parsed = parseInt(val, 10)
@@ -86,6 +99,7 @@ export function Sequencer({ matrix, currentStep, steps, onToggle, patternNumber 
           />
         </div>
       </S.Footer>
+      {isLoading && <LoadingSpinner message="Loading kit..." />}
     </S.Container>
   )
 }

@@ -33,6 +33,7 @@ export const theme = {
   shadows: {
     soft: "0 10px 24px rgba(0,0,0,0.45)",
     inset: "inset 0 2px 10px rgba(0,0,0,0.5)",
+    dropdown: "0 4px 12px rgba(0,0,0,0.3)",
   },
   spacing: (n: number) => `${n * 8}px`,
   typography: {
