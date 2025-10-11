@@ -194,6 +194,13 @@ export function getDrumKitSampleUrls(kitId: string): string[] {
 }
 
 /**
+ * Get all available drum kits including user kits at the end
+ */
+export function getAllDrumKits(): DrumKitPreset[] {
+  return DRUM_KIT_PRESETS;
+}
+
+/**
  * Get a drum kit preset by ID
  */
 export function getDrumKitPreset(kitId: string): DrumKitPreset | undefined {

@@ -1,5 +1,6 @@
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { TB303Note, TB303Patch } from '../../audio/TB303Synth';
+import { deleteTB303PatternByIndex, loadTB303Patterns, saveTB303PatternByIndex, type TB303Pattern } from '../../storage/local';
 import Knob from '../Knob/Knob';
 import * as S from './PianoRoll.styles';
 
@@ -34,7 +35,18 @@ function getNoteName(midiNote: number): string {
 export function PianoRoll({ notes, patch, steps, currentStep, onNotesChange, onPatchChange, isPlaying, onTogglePlay }: Props) {
   const [selectedTool, setSelectedTool] = useState<'draw' | 'accent' | 'slide'>('draw');
   const [resizingNote, setResizingNote] = useState<{ note: number; step: number; initialDuration: number } | null>(null);
+  const [currentPatternId, setCurrentPatternId] = useState<number | null>(null);
+  const [savedPatterns, setSavedPatterns] = useState<TB303Pattern[]>([]);
+  const [patternName, setPatternName] = useState<string>('');
   const gridRef = useRef<HTMLDivElement>(null);
+
+  // Load saved patterns on mount
+  useEffect(() => {
+    setSavedPatterns(loadTB303Patterns());
+  }, []);
+
+  // Generate pattern slots (1-16)
+  const patternSlots = useMemo(() => Array.from({ length: 16 }, (_, i) => i + 1), []);
 
   const midiNotes = useMemo(() => {
     return Array.from({ length: NOTE_COUNT }, (_, i) => START_NOTE + NOTE_COUNT - 1 - i);
@@ -113,6 +125,47 @@ export function PianoRoll({ notes, patch, steps, currentStep, onNotesChange, onP
     // Check if this cell is the start of a note
     return notes.find(n => n.note === note && n.startStep === step);
   }, [notes]);
+
+  const handleSavePattern = useCallback((patternId: number) => {
+    const name = patternName.trim() || `Pattern ${patternId}`;
+    saveTB303PatternByIndex(patternId, name, notes, patch);
+    setSavedPatterns(loadTB303Patterns());
+    setCurrentPatternId(patternId);
+    setPatternName('');
+  }, [notes, patch, patternName]);
+
+  const handleLoadPattern = useCallback((patternId: number) => {
+    const patterns = loadTB303Patterns();
+    const pattern = patterns.find(p => p.id === patternId);
+    if (pattern) {
+      onNotesChange(pattern.notes);
+      onPatchChange(pattern.patch);
+      setCurrentPatternId(patternId);
+      setPatternName(pattern.name);
+    }
+  }, [onNotesChange, onPatchChange]);
+
+  const handleDeletePattern = useCallback((patternId: number, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (confirm(`Delete pattern ${patternId}?`)) {
+      deleteTB303PatternByIndex(patternId);
+      setSavedPatterns(loadTB303Patterns());
+      if (currentPatternId === patternId) {
+        setCurrentPatternId(null);
+        setPatternName('');
+      }
+    }
+  }, [currentPatternId]);
+
+  const handleNewPattern = useCallback(() => {
+    onNotesChange([]);
+    setCurrentPatternId(null);
+    setPatternName('');
+  }, [onNotesChange]);
+
+  const hasPattern = useCallback((patternId: number) => {
+    return savedPatterns.some(p => p.id === patternId);
+  }, [savedPatterns]);
 
   return (
     <S.Container
@@ -248,6 +301,71 @@ export function PianoRoll({ notes, patch, steps, currentStep, onNotesChange, onP
           Wave: {patch.waveform}
         </S.Button>
       </S.ParameterSection>
+
+      <S.PatternBrowserSection>
+        <S.PatternBrowserTitle>Pattern Browser</S.PatternBrowserTitle>
+        <S.PatternControls>
+          <S.Button onClick={handleNewPattern}>
+            New
+          </S.Button>
+          {currentPatternId !== null && (
+            <S.Button onClick={() => handleSavePattern(currentPatternId)}>
+              Update {currentPatternId}
+            </S.Button>
+          )}
+          <input
+            type="text"
+            placeholder="Pattern name..."
+            value={patternName}
+            onChange={(e) => setPatternName(e.target.value)}
+            style={{
+              padding: '4px 8px',
+              fontSize: '12px',
+              border: '1px solid #444',
+              borderRadius: '3px',
+              background: '#2a2a2a',
+              color: '#fff',
+              flex: 1,
+              maxWidth: '200px'
+            }}
+          />
+        </S.PatternControls>
+        <S.PatternList>
+          {patternSlots.map((slotId) => {
+            const pattern = savedPatterns.find(p => p.id === slotId);
+            return (
+              <S.PatternItem
+                key={slotId}
+                $active={currentPatternId === slotId}
+                $hasPattern={hasPattern(slotId)}
+                onClick={() => {
+                  if (hasPattern(slotId)) {
+                    handleLoadPattern(slotId);
+                  } else {
+                    handleSavePattern(slotId);
+                  }
+                }}
+                title={pattern ? pattern.name : `Empty slot ${slotId}`}
+              >
+                {pattern ? pattern.name : slotId}
+                {hasPattern(slotId) && (
+                  <span
+                    onClick={(e) => handleDeletePattern(slotId, e)}
+                    style={{
+                      marginLeft: '4px',
+                      opacity: 0.6,
+                      cursor: 'pointer',
+                      fontSize: '10px'
+                    }}
+                  >
+                    ×
+                  </span>
+                )}
+              </S.PatternItem>
+            );
+          })}
+        </S.PatternList>
+      </S.PatternBrowserSection>
     </S.Container>
   );
 }

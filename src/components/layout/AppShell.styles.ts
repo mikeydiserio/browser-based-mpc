@@ -2,13 +2,15 @@ import styled from "styled-components";
 
 export const Shell = styled.div`
   display: grid;
-  grid-template-rows: auto 1fr auto;
-  grid-template-columns: 320px 1fr 280px;
+  grid-template-rows: 80px 1fr auto;
+  grid-template-columns: 280px 1fr 60px;
   grid-template-areas:
     "sidebar header rightsidebar"
     "sidebar main rightsidebar"
     "sidebar footer rightsidebar";
   min-height: 100vh;
+  max-height: 100vh;
+  overflow: hidden;
 `;
 
 export const Sidebar = styled.aside`
@@ -17,12 +19,12 @@ export const Sidebar = styled.aside`
   border-right: 1px solid ${({ theme }) => theme.colors.gridLine};
   padding: ${({ theme }) => theme.spacing(1)};
   box-shadow: ${({ theme }) => theme.shadows.inset};
-  display: grid;
-  grid-auto-rows: max-content;
-  gap: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: ${({ theme }) => theme.spacing(1)};
   overflow-x: hidden;
   overflow-y: auto;
-  min-width: 0;
+  height: 100%;
 `;
 
 export const RightSidebar = styled.aside`
@@ -42,11 +44,12 @@ export const RightSidebar = styled.aside`
 export const Header = styled.header`
   grid-area: header;
   background: ${({ theme }) => theme.colors.panelRaised};
-  padding: ${({ theme }) => theme.spacing(0.5)};
+  padding: ${({ theme }) => `${theme.spacing(1)} ${theme.spacing(2)}`};
   border-bottom: 1px solid ${({ theme }) => theme.colors.gridLine};
   display: flex;
   align-items: center;
   justify-content: space-between;
+  height: 80px;
   position: sticky;
   top: 0;
   z-index: 100;
@@ -55,21 +58,28 @@ export const Header = styled.header`
 export const Main = styled.main`
   grid-area: main;
   padding: ${({ theme }) => theme.spacing(2)};
+  padding-bottom: 200px; /* Space for sticky effects panel footer */
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
   grid-auto-rows: max-content;
   gap: ${({ theme }) => theme.spacing(2)};
+  overflow-y: auto;
+  overflow-x: hidden;
+  height: calc(100vh - 80px);
+  background: ${({ theme }) => theme.colors.background};
 `;
 
 export const Footer = styled.footer`
   grid-area: footer;
-  padding: ${({ theme }) => theme.spacing(1)};
+  padding: ${({ theme }) => theme.spacing(0.5)};
   color: ${({ theme }) => theme.colors.textSecondary};
   font-size: 11px;
   display: flex;
   align-items: center;
   justify-content: center;
   border-top: 1px solid ${({ theme }) => theme.colors.gridLine};
+  background: ${({ theme }) => theme.colors.panel};
+  height: 32px;
 `;
 
 export const FullRow = styled.div`
@@ -78,6 +88,9 @@ export const FullRow = styled.div`
 
 export const HalfRow = styled.div`
   grid-column: span 1;
+  display: flex;
+  flex-direction: column;
+  gap: ${({ theme }) => theme.spacing(1.5)};
 `;
 
 // Panel Header Styles
@@ -220,4 +233,48 @@ export const MixerToggleButton = styled.button`
   &:hover {
     background: ${({ theme }) => theme.colors.panel};
   }
+`;
+
+// Sidebar Navigation
+export const SidebarNav = styled.nav`
+  display: flex;
+  flex-direction: column;
+  gap: ${({ theme }) => theme.spacing(0.5)};
+  padding: ${({ theme }) => theme.spacing(1)} 0;
+  border-bottom: 1px solid ${({ theme }) => theme.colors.gridLine};
+`;
+
+export const NavButton = styled.button`
+  padding: ${({ theme }) => theme.spacing(1)};
+  background: transparent;
+  border: none;
+  border-radius: 4px;
+  color: ${({ theme }) => theme.colors.textSecondary};
+  cursor: pointer;
+  text-align: left;
+  font-size: 13px;
+  font-weight: 500;
+  transition: all 0.2s;
+
+  &:hover {
+    background: ${({ theme }) => theme.colors.surface};
+    color: ${({ theme }) => theme.colors.text};
+  }
+
+  &.active {
+    background: ${({ theme }) => theme.colors.surface};
+    color: ${({ theme }) => theme.colors.primary};
+  }
+`;
+
+// Panel Container
+export const Panel = styled.div`
+  background: ${({ theme }) => theme.colors.panel};
+  border: 1px solid ${({ theme }) => theme.colors.gridLine};
+  border-radius: 8px;
+  overflow: hidden;
+`;
+
+export const PanelBody = styled.div`
+  padding: ${({ theme }) => theme.spacing(1.5)};
 `;

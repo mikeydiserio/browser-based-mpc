@@ -55,6 +55,8 @@ export const Grid = styled.div`
   display: flex;
   gap: 0;
   overflow-x: auto;
+  overflow-y: auto;
+  max-height: 400px;
   background: #1a1a1a;
   border: 2px solid #333333;
   border-radius: 4px;
@@ -68,6 +70,9 @@ export const PianoKeys = styled.div`
   border-right: 2px solid #333333;
   flex-shrink: 0;
   box-shadow: inset -2px 0 4px rgba(0, 0, 0, 0.1);
+  position: sticky;
+  left: 0;
+  z-index: 2;
 `;
 
 export const PianoKey = styled.div<{ $isBlack: boolean; $lit?: boolean }>`
@@ -175,4 +180,66 @@ export const ParameterSection = styled.div`
   padding-top: 12px;
   border-top: 1px solid ${({ theme }) => theme.colors.border};
   flex-wrap: wrap;
+`;
+
+export const PatternBrowserSection = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 12px;
+  border-top: 1px solid ${({ theme }) => theme.colors.border};
+`;
+
+export const PatternBrowserTitle = styled.div`
+  font-size: 12px;
+  color: ${({ theme }) => theme.colors.textSecondary};
+  letter-spacing: 0.4px;
+  font-weight: 600;
+`;
+
+export const PatternList = styled.div`
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
+  gap: 6px;
+  max-height: 120px;
+  overflow-y: auto;
+  padding: 4px;
+  background: ${({ theme }) => theme.colors.background};
+  border-radius: 4px;
+  border: 1px solid ${({ theme }) => theme.colors.border};
+`;
+
+export const PatternItem = styled.button<{
+  $active?: boolean;
+  $hasPattern?: boolean;
+}>`
+  padding: 8px;
+  font-size: 11px;
+  background: ${({ theme, $active, $hasPattern }) =>
+    $active
+      ? theme.colors.primary
+      : $hasPattern
+      ? theme.colors.surface
+      : theme.colors.background};
+  color: ${({ theme, $active }) =>
+    $active ? theme.colors.background : theme.colors.text};
+  border: 1px solid
+    ${({ theme, $hasPattern }) =>
+      $hasPattern ? theme.colors.primary : theme.colors.border};
+  border-radius: 3px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  font-weight: ${({ $hasPattern }) => ($hasPattern ? "600" : "400")};
+
+  &:hover {
+    background: ${({ theme, $active }) =>
+      $active ? theme.colors.primary : theme.colors.surface};
+    border-color: ${({ theme }) => theme.colors.primary};
+  }
+`;
+
+export const PatternControls = styled.div`
+  display: flex;
+  gap: 8px;
+  align-items: center;
 `;

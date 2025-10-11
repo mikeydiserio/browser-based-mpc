@@ -1,5 +1,6 @@
-import { useCallback, useState } from 'react';
-import { DRUM_KIT_PRESETS } from '../../utils/drumKits';
+import { useCallback, useEffect, useState } from 'react';
+import { loadAllKitNames } from '../../storage/local';
+import { DRUM_KIT_PRESETS, type DrumKitPreset } from '../../utils/drumKits';
 import * as S from './KitSelector.styles';
 
 type Props = {
@@ -24,6 +25,35 @@ export function KitSelector({
   const [editValue, setEditValue] = useState('');
   const [imageErrors, setImageErrors] = useState<Record<string, boolean>>({});
   const [carouselIndex, setCarouselIndex] = useState(0);
+  const [allKits, setAllKits] = useState<DrumKitPreset[]>([]);
+
+  // Create combined list of kits: presets + user kits
+  useEffect(() => {
+    const userKitNames = loadAllKitNames();
+    const userKits: DrumKitPreset[] = [];
+    for (let i = 1; i <= 8; i++) {
+      if (userKitNames[i - 1] && userKitNames[i - 1] !== `Kit ${i}`) {
+        userKits.push({
+          id: `user-kit-${i}`,
+          name: userKitNames[i - 1],
+          path: '',
+          samples: [],
+          image: '',
+        });
+      }
+    }
+
+    // Combine preset kits with user kits at the end
+    const combinedKits = [...DRUM_KIT_PRESETS, ...userKits];
+    setAllKits(combinedKits);
+  }, [kitNames]); // Update when kit names change
+
+  // Reset carousel to start if kits change (e.g., a new kit was added)
+  useEffect(() => {
+    if (carouselIndex >= allKits.length) {
+      setCarouselIndex(0);
+    }
+  }, [allKits.length, carouselIndex]);
 
   const handleNameClick = useCallback(() => {
     setEditValue(kitNames[currentKit - 1] || `Kit ${currentKit}`);
@@ -69,15 +99,15 @@ export function KitSelector({
   }, []);
 
   const handleCarouselPrev = useCallback(() => {
-    setCarouselIndex(prev => (prev === 0 ? DRUM_KIT_PRESETS.length - 1 : prev - 1));
-  }, []);
+    setCarouselIndex(prev => (prev === 0 ? allKits.length - 1 : prev - 1));
+  }, [allKits.length]);
 
   const handleCarouselNext = useCallback(() => {
-    setCarouselIndex(prev => (prev === DRUM_KIT_PRESETS.length - 1 ? 0 : prev + 1));
-  }, []);
+    setCarouselIndex(prev => (prev === allKits.length - 1 ? 0 : prev + 1));
+  }, [allKits.length]);
 
   // Get current preset based on carousel index
-  const currentPreset = DRUM_KIT_PRESETS[carouselIndex];
+  const currentPreset = allKits[carouselIndex];
 
   return (
     <S.Container>
@@ -115,8 +145,8 @@ export function KitSelector({
           </S.KitSelector>
         </S.KitRow>
       </S.Section>
-      
-      {onLoadPreset && (
+
+      {onLoadPreset && allKits.length > 0 && (
         <S.Section>
           <S.Label>Drum Machines</S.Label>
           <S.CarouselContainer>
@@ -126,13 +156,13 @@ export function KitSelector({
             <S.CarouselContent>
               <S.PresetActions>
                 <S.PresetItem
-                  key={currentPreset.id}
-                  onClick={() => handlePresetClick(currentPreset.id)}
-                  $active={currentPresetId === currentPreset.id}
+                  key={currentPreset?.id || 'empty'}
+                  onClick={() => currentPreset && handlePresetClick(currentPreset.id)}
+                  $active={currentPresetId === currentPreset?.id}
                 >
-                  {imageErrors[currentPreset.id] ? (
+                  {imageErrors[currentPreset?.id || ''] || !currentPreset?.image || currentPreset?.id.startsWith('user-kit-') ? (
                     <S.PresetImagePlaceholder>
-                      No Img
+                      {currentPreset?.id.startsWith('user-kit-') ? 'User' : 'No Img'}
                     </S.PresetImagePlaceholder>
                   ) : (
                     <S.PresetImage
@@ -141,10 +171,10 @@ export function KitSelector({
                       onError={() => handleImageError(currentPreset.id)}
                     />
                   )}
-                  <S.PresetName>{currentPreset.name}</S.PresetName>
+                  <S.PresetName>{currentPreset?.name || 'Loading...'}</S.PresetName>
                 </S.PresetItem>
-                {currentPresetId !== currentPreset.id && (
-                  <S.LoadButton onClick={() => handlePresetClick(currentPreset.id)}>
+                {currentPresetId !== currentPreset?.id && (
+                  <S.LoadButton onClick={() => currentPreset && handlePresetClick(currentPreset.id)}>
                     Load Kit
                   </S.LoadButton>
                 )}
@@ -155,7 +185,7 @@ export function KitSelector({
             </S.CarouselButton>
           </S.CarouselContainer>
           <S.CarouselIndicator>
-            {carouselIndex + 1} of {DRUM_KIT_PRESETS.length}
+            {carouselIndex + 1} of {allKits.length}
           </S.CarouselIndicator>
         </S.Section>
       )}

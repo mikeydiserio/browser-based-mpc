@@ -27,9 +27,11 @@ type TransportProps = {
   onSwingChange: (amount: number) => void
   arrangementOn?: boolean
   onToggleArrangement?: () => void
+  sequencerMode?: boolean
+  onToggleSequencerMode?: () => void
 }
 
-export function Transport({ isPlaying, bpm, metronomeOn, steps, onTogglePlay, onTempoChange, onToggleMetronome, onStepsChange, swing, onSwingChange, arrangementOn, onToggleArrangement }: TransportProps) {
+export function Transport({ isPlaying, bpm, metronomeOn, steps, onTogglePlay, onTempoChange, onToggleMetronome, onStepsChange, swing, onSwingChange, arrangementOn, onToggleArrangement, sequencerMode, onToggleSequencerMode }: TransportProps) {
   const handleBPMInput = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     onTempoChange(Number(e.target.value))
   }, [onTempoChange])
@@ -44,6 +46,9 @@ export function Transport({ isPlaying, bpm, metronomeOn, steps, onTogglePlay, on
         <S.Button onClick={onToggleMetronome}>{metronomeOn ? 'Metronome: On' : 'Metronome: Off'}</S.Button>
         {onToggleArrangement && (
           <S.Button onClick={onToggleArrangement}>{arrangementOn ? 'Arr: On' : 'Arr: Off'}</S.Button>
+        )}
+        {onToggleSequencerMode && (
+          <S.Button onClick={onToggleSequencerMode}>{sequencerMode ? 'Seq: On' : 'Free Play'}</S.Button>
         )}
       </S.ToggleGroup>
       <S.Select value={steps} onChange={(e) => onStepsChange(Number(e.target.value))}>

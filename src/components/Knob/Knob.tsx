@@ -9,10 +9,11 @@ type Props = {
   value: number
   onChange: (v: number) => void
   format?: (v: number) => string
-  size?: 'small' | 'medium'
+  size?: 'small' | 'medium' | number
+  color?: string
 }
 
-export function Knob({ label, min, max, step = 1, value, onChange, format, size = 'medium' }: Props) {
+export function Knob({ label, min, max, step = 1, value, onChange, format, size = 'medium', color }: Props) {
   const clamp = useCallback((v: number) => Math.max(min, Math.min(max, v)), [min, max])
   const [dragging, setDragging] = useState(false)
   const [internalValue, setInternalValue] = useState(value)
@@ -60,7 +61,7 @@ export function Knob({ label, min, max, step = 1, value, onChange, format, size 
 
   return (
     <S.Container $size={size}>
-      <S.Dial $angle={angle} $size={size} onMouseDown={onMouseDown} aria-label={label} role="slider" />
+      <S.Dial $angle={angle} $size={size} $color={color} onMouseDown={onMouseDown} aria-label={label} role="slider" />
       <S.Label $size={size}>{label}</S.Label>
       <S.Value $size={size}>{format ? format(dragging ? internalValue : value) : (dragging ? internalValue : value)}</S.Value>
     </S.Container>

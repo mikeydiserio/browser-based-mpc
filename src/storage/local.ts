@@ -5,6 +5,7 @@ const SWING_KEY = "mpc.swing.v1";
 const TIMELINE_KEY = "mpc.timeline.v1";
 const METRONOME_KEY = "mpc.metronome.v1";
 const SYNTHS_KEY = "mpc.synths.v1";
+const TB303_PATTERNS_KEY = "mpc.tb303.patterns.v1";
 
 export type PersistedSample = {
   id: string;
@@ -189,4 +190,42 @@ export function saveSynthsForSet(setId: number, synths: PersistedSynth[]) {
 export function loadSynthsForSet(setId: number): PersistedSynth[] {
   const raw = localStorage.getItem(`${SYNTHS_KEY}.set${setId}`);
   return raw ? JSON.parse(raw) : [];
+}
+
+// TB-303 Pattern persistence
+export type TB303Pattern = {
+  id: number;
+  name: string;
+  notes: TB303Note[];
+  patch: TB303Patch;
+};
+
+export function saveTB303Patterns(patterns: TB303Pattern[]) {
+  localStorage.setItem(TB303_PATTERNS_KEY, JSON.stringify(patterns));
+}
+
+export function loadTB303Patterns(): TB303Pattern[] {
+  const raw = localStorage.getItem(TB303_PATTERNS_KEY);
+  return raw ? JSON.parse(raw) : [];
+}
+
+export function saveTB303PatternByIndex(
+  index: number,
+  name: string,
+  notes: TB303Note[],
+  patch: TB303Patch
+) {
+  const all = loadTB303Patterns().filter((p) => p.id !== index);
+  all.push({ id: index, name, notes, patch });
+  saveTB303Patterns(all);
+}
+
+export function loadTB303PatternByIndex(index: number): TB303Pattern | null {
+  const all = loadTB303Patterns();
+  return all.find((p) => p.id === index) || null;
+}
+
+export function deleteTB303PatternByIndex(index: number) {
+  const all = loadTB303Patterns().filter((p) => p.id !== index);
+  saveTB303Patterns(all);
 }

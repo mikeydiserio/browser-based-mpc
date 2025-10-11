@@ -3,10 +3,10 @@ import { createDefaultEffectsChain } from "./effects";
 import type { EQSettings } from "./eq";
 import { createDefaultEQSettings } from "./eq";
 import {
-  defaultTB303Patch,
-  TB303Synth,
-  type TB303Note,
-  type TB303Patch,
+    defaultTB303Patch,
+    TB303Synth,
+    type TB303Note,
+    type TB303Patch,
 } from "./TB303Synth";
 
 export type LoadedSample = {
@@ -63,6 +63,7 @@ export class AudioEngine {
   private drumsBusGain: GainNode;
   private tb303BusGain: GainNode;
   private swingAmount = 0; // 0..1 fraction of half-step delay on off-steps
+  private sequencerEnabled = true; // whether sequencer triggers pads
 
   private stepCallbacks = new Set<(e: StepEvent) => void>();
   private padMap = new Map<string, LoadedSample>();
@@ -103,6 +104,21 @@ export class AudioEngine {
     this.metronomeGain = this.audioContext.createGain();
     this.metronomeGain.gain.value = 0.0;
     this.metronomeGain.connect(this.masterGain);
+  }
+
+  /** Ensure the AudioContext resumes on first user gesture (click/touch/key). */
+  enableAutoResume() {
+    const resume = () => {
+      if (this.audioContext.state === "suspended") {
+        this.audioContext.resume().catch(() => {});
+      }
+      window.removeEventListener("click", resume);
+      window.removeEventListener("touchstart", resume);
+      window.removeEventListener("keydown", resume);
+    };
+    window.addEventListener("click", resume, { once: true });
+    window.addEventListener("touchstart", resume, { once: true });
+    window.addEventListener("keydown", resume, { once: true });
   }
 
   setBpm(bpm: number) {
@@ -158,6 +174,10 @@ export class AudioEngine {
     return this.tb303BusMuted;
   }
 
+  getTb303BusGain() {
+    return this.tb303BusGain;
+  }
+
   attachDrumsAnalyser(node: AnalyserNode) {
     try {
       this.drumsBusGain.connect(node);
@@ -194,6 +214,14 @@ export class AudioEngine {
 
   getSwing() {
     return this.swingAmount;
+  }
+
+  setSequencerEnabled(enabled: boolean) {
+    this.sequencerEnabled = enabled;
+  }
+
+  getSequencerEnabled() {
+    return this.sequencerEnabled;
   }
 
   setPattern(matrix: boolean[][]) {
@@ -244,19 +272,21 @@ export class AudioEngine {
       this.triggerClick(time, isAccent);
     }
 
-    for (let padRow = 0; padRow < this.patternMatrix.length; padRow++) {
-      if (this.patternMatrix[padRow]?.[stepIndex]) {
-        const padId = `pad-${padRow}`;
+    if (this.sequencerEnabled) {
+      for (let padRow = 0; padRow < this.patternMatrix.length; padRow++) {
+        if (this.patternMatrix[padRow]?.[stepIndex]) {
+          const padId = `pad-${padRow}`;
 
-        // Check if this pad has a synth
-        const synth = this.synthMap.get(padId);
-        if (synth) {
-          this.triggerSynthNotes(synth, stepIndex, time);
-        } else {
-          // Otherwise, trigger sample
-          const sample = this.padMap.get(padId);
-          if (sample?.audioBuffer) {
-            this.triggerBuffer(sample, time);
+          // Check if this pad has a synth
+          const synth = this.synthMap.get(padId);
+          if (synth) {
+            this.triggerSynthNotes(synth, stepIndex, time);
+          } else {
+            // Otherwise, trigger sample
+            const sample = this.padMap.get(padId);
+            if (sample?.audioBuffer) {
+              this.triggerBuffer(sample, time);
+            }
           }
         }
       }
